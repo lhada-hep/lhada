@@ -1,0 +1,98 @@
+object iso_mu
+       take particles
+       select abs(pid) = 13
+       select pt > 10
+       apply isolation(r=0.3, et = 5)
+
+object iso_e
+       take particles
+       select abs(pid) = 11
+       select pt > 10
+       apply isolation(r=0.3, et = 5)
+
+object iso_tau
+       take particles
+       select abs(pid) = 15
+       select pt > 18
+
+object ak8jets
+       take particles
+       fastjet(antikt, r=0.8)
+
+cut trigger
+    etmiss > 90
+    htmiss > 90
+
+cut delta_phi_etmiss_jet
+    delta_phi(etmiss, jets) > 0.5
+
+cut muon_veto
+    iso_mu.size < 1
+    
+cut electron_veto
+    iso_e.size < 1
+
+cut photon_veto
+    iso_phot.size < 1
+
+cut tau_veto
+    iso_tau.size < 1
+
+cut b_jet_veto
+    bjets.size < 1
+
+cut leading_jet_pt
+    jets[1].pt > 100
+
+cut dphi_jet_met
+    dphi(met, four_leading_jets) > 0.5
+
+cut met_soft
+    met.pt > 200
+
+cut ak8_jet
+    ak8jets[1].pt > 250
+    
+cut tau2tau1
+    tau2(ak8jets[1]) / tau1(ak8jets[1]) < 0.6
+
+cut mpruned
+    ak8jets[1].m > 65
+    ak8jets[1].m < 105
+
+cut met_hard    
+    met.pt > 250
+    
+cut preselection
+    select trigger
+    select muon_veto	    
+    select electron_veto   
+    select photon_veto	    
+    select tau_veto	    
+    select b_jet_veto	    
+    select leading_jet_pt  
+    select dphi_jet_met
+    select met_soft
+
+cut mono-v-extra
+    select ak8_jet_pt	    
+    select tau2tau1	    
+    select mpruned	    
+    select met_hard
+
+cut mono-v
+    select preselection
+    select mono-v-extra
+
+cut mono-j
+    select preselection
+    reject mono-v-extra
+
+
+table results_events
+      type events
+      columns name     obs bkg dbkg
+      entry mono-v     139
+      entry mono-jet   884
+      
+      
