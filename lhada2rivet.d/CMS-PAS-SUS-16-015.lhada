@@ -17,7 +17,7 @@ object met
 
 object ht
        take jets
-       apply scalar_pt_sum
+       apply scalar_pt_sum(jets=jets)
 
 #object iso_e
 #       take electrons
@@ -75,20 +75,26 @@ function btag_eff
 function mt2
        #Computes the M_{T2} observable, http://arXiv.org/abs/hep-ph/9906349v1
        arg particle1 #quadrivector of first visible particle (only m, px, py are used)
-       arg particle2 #quadrivector of first visible particle (only m, px, py are used)
+       arg particle2 #quadrivector of secondvisible particle (only m, px, py are used)
        arg met       #quadrivector of missing energy (only px, py are used)       
+       code CMS-PAS-SUS-015-functions.cc
+
+function dphi
+       #compute difference of azimuthal angles
+       arg particle1 #quadrivector of first particle (only  px, py are used)
+       arg particle2 #quadrivector of second particle (only px, py are used)
        code CMS-PAS-SUS-015-functions.cc
 
 #cut trigger
 
 cut mt2_cut
-    select (jets.size < 2) or (mt2(particle1 = jets[1], particle2 = jets[2], met = met) > 200)
+#    select (jets.size < 2) or (mt2(particle1 = jets[1], particle2 = jets[2], met = met) > 200)
     
 cut deltaphi_etmiss_jet
     select (dphi(met, jets[1]) > 0.3) and (dphi(met, jets[2]) > 0.3) and(dphi(met, jets[3]) > 0.3) and(dphi(met, jets[4]) > 0.3)
     
 #cut etmiss_non_had_frac
-#cut veto
+cut veto
 #    select (lep_for_veto.size < 1) and (obj_for_tau_veto.size < 1)
 
 cut preselection
@@ -140,7 +146,7 @@ cut 1j_medium_3
     select mt2_cut > 800
 
 cut 1j_medium_4
-    select at_last_two_jet_selection
+    select at_least_two_jet_selection
     select jets.size < 4
     select bjets.size > 0
     select bjets.size < 3
@@ -149,7 +155,7 @@ cut 1j_medium_4
     select mt2_cut > 600
 
 cut 1j_medium_5
-    select at_last_two_jet_selection
+    select at_least_two_jet_selection
     select jets.size < 4
     select bjets.size < 2
     select ht > 1000
@@ -157,7 +163,7 @@ cut 1j_medium_5
     select mt2_cut > 800
 
 cut 1j_medium_6
-    select at_last_two_jet_selection
+    select at_least_two_jet_selection
     select jets.size < 4
     select bjets.size = 2
     select ht > 1000
@@ -165,14 +171,14 @@ cut 1j_medium_6
     select mt2_cut > 400
 
 cut 1j_medium_7
-    select at_last_two_jet_selection
+    select at_least_two_jet_selection
     select jets.size < 4
     select bjets.size < 2
     select ht > 1500
     select mt2_cut > 400
 
 cut 1j_medium_8
-    select at_last_two_jet_selection
+    select at_least_two_jet_selection
     select jets.size < 4
     select bjets.size = 2
     select ht > 1500
