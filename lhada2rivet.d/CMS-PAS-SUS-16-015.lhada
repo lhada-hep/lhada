@@ -1,10 +1,16 @@
+function scalar_pt_sum
+       #Computes the saclar sum of the transverse momentum of a set of particles
+       arg particles partciles or energy-momentum quadrivectors to sum over. Only the .pt method is used.
+       code CMS-PAS-SUS-16-015-functions.cc
+
+
 object jets_eta47
        take external
        apply antikt(dR=0.4, ptmin=30, etamax=4.7)
 
 object jets
        take jets_eta47
-       select eta < 2.4.
+       select eta < 2.4
 
 object bjets
        take external
@@ -13,11 +19,11 @@ object bjets
 
 object met
        take external
-
+       apply met()
 
 object ht
        take jets
-       apply scalar_pt_sum(jets=jets)
+       apply scalar_pt_sum()
 
 #object iso_e
 #       take electrons
@@ -70,20 +76,20 @@ object ht
 function btag_eff
        #Returns the b-tagging efficiency of a b jet
        arg bjet #b jet to apply efficiency to
-       code CMS-PAS-SUS-015-functions.cc
+       code CMS-PAS-SUS-16-015-functions.cc
 	 
 function mt2
        #Computes the M_{T2} observable, http://arXiv.org/abs/hep-ph/9906349v1
        arg particle1 #quadrivector of first visible particle (only m, px, py are used)
        arg particle2 #quadrivector of secondvisible particle (only m, px, py are used)
        arg met       #quadrivector of missing energy (only px, py are used)       
-       code CMS-PAS-SUS-015-functions.cc
+       code CMS-PAS-SUS-16-015-functions.cc
 
 function dphi
        #compute difference of azimuthal angles
        arg particle1 #quadrivector of first particle (only  px, py are used)
        arg particle2 #quadrivector of second particle (only px, py are used)
-       code CMS-PAS-SUS-015-functions.cc
+       code CMS-PAS-SUS-16-015-functions.cc
 
 #cut trigger
 
@@ -111,7 +117,7 @@ cut one_jet_selection
 
 cut at_least_two_jet_selection
     select preselection
-    select jets.size() > 1
+    select jets.size > 1
     select mt2_cut > 200
     
    
