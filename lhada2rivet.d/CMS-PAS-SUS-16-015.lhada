@@ -15,7 +15,7 @@ object jets
 object bjets
        take external
        apply antikt_b(dR=0.4, ptmin=30, etamax=2.5)
-       weight btag_eff
+       apply btag_eff
 
 object met
        take external
