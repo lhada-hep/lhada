@@ -12,19 +12,25 @@ block_start = re.compile(r'object|cut|region|function|table')
 re_indented = re.compile(r'^\s')
 
 analysis_code_template = """// -*- C++ -*-
+#include <iostream>
 #include "Rivet/Analysis.hh"
+#include "Rivet/Tools/Cutflow.hh"
 
 %INCLUDE_BLOCK%
 
 namespace Rivet {
 
 
-  class RivetAnalysis : public Analysis {
+  class %ANALYSIS_NAME%: public Analysis {
   public:
 
+    ///Cut ids
+    %CUT_IDS%
+
     /// Constructor
-    RivetAnalysis()
-      : Analysis("RivetAnalysis")
+    %ANALYSIS_NAME%():
+      Analysis("%ANALYSIS_NAME%"),
+      cutflow("CutFlow", %CUTFLOW_INIT%)
     {  }
 
 
@@ -63,6 +69,9 @@ namespace Rivet {
 
     /// Normalise histograms etc., after the run
     void finalize() {
+       std::cout << "Analsyis cut flow:\\n"
+                 << "-----------------\\n\\n"
+                 << cutflow << "\\n";
     }
 
 
@@ -79,8 +88,12 @@ namespace Rivet {
      */
     %COUNTER_DECLARATION%
     //@}
+
+    ///Tracks the event counts after each cut
+    Cutflow cutflow;
+
   };
-  DECLARE_RIVET_PLUGIN(%ANALYSIS_NAME%)
+  DECLARE_RIVET_PLUGIN(%ANALYSIS_NAME%);
 }\n"""
 
 class FileReader:
@@ -115,7 +128,7 @@ weight_funcs = {}
 counter_fill = ""
 counter_decl = ""
 outfile = None
-names = {}
+names = {"cutflow": 0, "CutIds": 0}
 func_codes = []
 tables = {}
 table_types = ["events", "limits", "cutflow", "corr", "bkg"]
@@ -124,13 +137,16 @@ histo_booking = ""
 #list of cuts used to define object collection
 obj_cuts = []
 
+#list of cut ids used for to identify the cut in the cutflow
+cut_ids = []
+
 #list of objects defined in LHADA file. Associate object name with its c++-code name mapped_name
 #In same rare case the two name can differ.
 particles = "particles"
 objects = OrderedDict([("external", particles), ("Particles", particles)])
 
 #Map object (cpp name) to types including intermediat object, i.e. not defined in LHADA file.
-types = { particles: "Rivet::Particles"}
+types = { particles: "Particles"}
 
 #list of defined cuts
 cuts = []
@@ -148,7 +164,7 @@ def unique_name(name):
         i = names[name] + 1
         names[name] = i
 
-        print '%s already used and mapped to %s.\n List of names:' % (name, name+str(i)), names
+        mess('%s already used and mapped to %s.\n List of names:' % (name, name+str(i)), names)
         
         return name + str(i)
     except KeyError:
@@ -158,12 +174,12 @@ def unique_name(name):
 
 def trans_func(code):
     '''Make the modifications of function c++ code read from LHADA input file required before inserting it in the Rivet analysis code'''
-    #TODO: Check LHADPArticle -> Rivet::Particle method mapping
+    #TODO: Check LHADPArticle -> Particle method mapping
     r = re.compile(r'\b(std::)vector\s*<\s*LHADAParticle\s*>')
-    code = r.sub('Rivet::Particles', code)
+    code = r.sub('Particles', code)
     print '///<', code
     r = re.compile(r'\bLHADAParticle\b')
-    code = r.sub('Rivet::Particle', code)
+    code = r.sub('Particle', code)
     print '///>', code
     return code
 
@@ -183,8 +199,6 @@ def get_func_code(file, func_name):
     template_line = ""
     r = None
     bra = 0
-    print '----------------------------------------------------------------------'
-    print 'Looking for function %s\n' % func_name
     for l in open(file):
         il += 1
         if comment_line.match(l):
@@ -199,10 +213,10 @@ def get_func_code(file, func_name):
             continue
         #endif m
         for t in re_split.split(l):
-            if len(t.strip()) > 0:
-                sys.stdout.write("\nState: %s; Next token: %s" % (state, t))
-            else:
-                sys.stdout.write(".")
+##            if len(t.strip()) > 0:
+            ##                sys.stdout.write("\nState: %s; Next token: %s" % (state, t))
+            ##else:
+            ##    sys.stdout.write(".")
             t_stripped = t.strip()
             if re_c_comment_start.match(t) and state != "comment":
                 prev_state = state
@@ -255,7 +269,6 @@ def get_func_code(file, func_name):
                     return_type += t
                     continue
                 state = "function_name"
-                print "\nFunction: %s, '%s'" % (t_stripped, func_name)
                 if t_stripped == func_name:
                     mess("Found the function %s we were looking for at line %d of file %s." % (func_name, il, file))
                     if func_found: #function was already found. multiple definition
@@ -333,27 +346,42 @@ def report_syntax_error(line_num, filename, line, message = ""):
     #sys.stderr.write(mess)
     raise RuntimeError(mess)
 
-def compose_rivet_cuts(cutname, cut):
-    '''Generate code to perform an object cut using a combination of standard Rivet cuts. Returns in case of the expression is too complex to express it using standard cut objects'''
+def compose_rivet_cuts(cuts):
+    '''Generate code to perform an object cut using a combination of standard Rivet cuts. Returns None in the case the expression is too complex to express it that way.'''
     #TODO add support to parentheses.
     cut = r"\s*\(?(pt|E|m|rapidity|\|\s*rapidity\s*\|charge|\|\s*charge\s*\|pid|\|\s*pid\s*\|phi)\s*(<|>|<=|>=|!=|==)\s*((0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?\)?"
     r = re.compile(r"^%s\s*((&&|\|\||and|or)\s*%s)*$" % (cut, cut))
-    if not r.match(cut):
-        return None
-    includes.append('Rivet/Tools/Cuts.hh')
-    re.sub(r"\bpt\b", "Rivet::Cuts::pT", cut)
-    re.sub(r"\bE\b", "Rivet::Cuts::E", cut)
-    re.sub(r"\bm\b", "Rivet::Cuts::mass", cut)
-    re.sub(r"\brapidity\b", "Rivet::Cuts::rap", cut)
-    re.sub(r"\b\|\s*rapidity\s*\|\b", "Rivet::Cuts::absrap", cut)
-    re.sub(r"\bcharge\b", "Rivet::Cuts::charge", cut)
-    re.sub(r"\b\|\s*charge\s*\|\b", "Rivet::Cuts::abscharge", cut)
-    re.sub(r"\bpid\b", "Rivet::Cuts::pid", cut)
-    re.sub(r"\b\|\s*pid\s*\|\b", "Rivet::Cuts::abspid", cut)
-    re.sub(r"\bphi\b", "Rivet::Cuts::phi", cut)
+
+    combined_cut = ""
+    op = ""
+    for c in cuts:
+        #TODO omit parentheses when they are not needed
+        combined_cut += "%s(%s)" % (op, c)
+        op = " && "
+    #next c
+
+    print '>>> combined cut: ', combined_cut
     
-    code += "Rivet::Cut %s = %s;" % (cutname, cut)
-    return code
+    if not r.match(combined_cut):
+        return None
+    
+    includes.append('Rivet/Tools/Cuts.hh')
+    re.sub(r"\bpt\b", "Cuts::pT", combined_cut)
+    re.sub(r"\bE\b", "Cuts::E", combined_cut)
+    re.sub(r"\bm\b", "Cuts::mass", combined_cut)
+    re.sub(r"\brapidity\b", "Cuts::rap", combined_cut)
+    re.sub(r"\b\|\s*rapidity\s*\|\b", "Cuts::absrap", combined_cut)
+    re.sub(r"\bcharge\b", "Cuts::charge", combined_cut)
+    re.sub(r"\b\|\s*charge\s*\|\b", "Cuts::abscharge", combined_cut)
+    re.sub(r"\bpid\b", "Cuts::pid", combined_cut)
+    re.sub(r"\b\|\s*pid\s*\|\b", "Cuts::abspid", combined_cut)
+    re.sub(r"\bphi\b", "Cuts::phi", combined_cut)
+    re.sub(r"\band\b", "&&", combined_cut)
+    re.sub(r"\bor\b", "||", combined_cut)
+
+    print '>>>> combined_cut:', combined_cut
+    
+    return combined_cut
 
 def gen_antikt(input_obj, dR, ptmin, etamax, cuts, output_obj):
     global proj_init, obj_def, particles, lhadafile
@@ -366,12 +394,23 @@ def gen_antikt(input_obj, dR, ptmin, etamax, cuts, output_obj):
     name = output_obj
     projname = unique_name(output_obj + "Proj")
     proj_init += 'addProjection(FastJets(fs, FastJets::ANTIKT, %g), "%s");\n' % (dR, name)
-    cutname = output_obj + "Cut"
-    cut_expr = gen_cut_obj(cutname, cuts)
+#    cutname = output_obj + "Cut"
+    if cuts:
+        cut_expr = compose_rivet_cuts(cuts)
+    else:
+        cut_expr = ""
+    #TODO: support for complex cuts
+    if cut_expr is None:
+        #TODO: check lhada file line number and fix it if not correct
+        raise RuntimeError("Error while generating for the object %s defined line %d of file %s. Only standard cuts are supported for jet inputs." % (output_obj, lhadafile.current_line, lhadafile.name))
     obj_def += multi_replace('''const FastJets& jetPro = applyProjection<FastJets>(event, "JETS");
-OBJ_TYPE JETS = jetPro.jetsByPt(CUTNAME);\n''', {"OBJ_TYPE": "Rivet::Jets", "JETS": name, "jetPro": projname, "CUTNAME": cut_expr})
+OBJ_TYPE JETS = jetPro.jetsByPt(CUTS);\n''',
+                             {"OBJ_TYPE": "Jets",
+                              "JETS": name,
+                              "jetPro": projname,
+                              "CUTS": cut_expr})
     insert_include('Rivet/Projections/FastJets.hh')
-    return ("Rivet::Jets", name)
+    return ("Jets", name)
 
 def gen_met(input_obj, cuts, output_obj):
     '''Generate code to produce missing ET quadrivector'''
@@ -388,7 +427,7 @@ def gen_met(input_obj, cuts, output_obj):
     obj_def   += multi_replace('''const MissingMomentum PROJ = applyProjection<MissingMomentum>(event, "OBJ");
 OBJ = PROJ.missingMomentum();\n''', {"OBJ": name, "PROJ": projname})    
     insert_include('Rivet/Projections/MissingMomentum.hh')
-    return ("FourVector", name)
+    return ("FourMomentum", name)
 
 
 def gen_part_per_id(self, object_name, pdg_id_string, ptmin, etamax, accept_tau_decay = True):
@@ -497,7 +536,7 @@ def block_replace(s, replace_map):
                     else:
                         swallow_empty_line = True
             except KeyError:
-                r += l + "\n"
+                tail = l
                 pass
             #endtry
             tail_ = multi_replace(tail, replace_map)
@@ -505,7 +544,6 @@ def block_replace(s, replace_map):
             #endif
         else:
             if len(l.strip()) == 0 and swallow_empty_line:
-                print "Skip empty line...."
                 pass
             else:
                 r += l + "\n"
@@ -589,12 +627,17 @@ def gen_apply(func_name, input_obj, args, cuts, output_obj):
     else:
         if func_name not in functions:
             raise RuntimeError("Error in line %d of file %s: the function %s was not declared. A 'function' block must declare it before its usage." %(lhadafile.current_line, lhadafile.name, func_name))
+
+        if cuts:
+            tmp_obj = unique_name("filtered_" + input_obj)
+            obj_def += gen_collection_filter_code(get_obj_type(input_obj), input_obj, cuts, tmp_obj) + "\n\n"
+            input_obj = tmp_obj
+        
         obj_def   += multi_replace('''%OUTPUT_OBJ% = %FUNC_NAME%(%ARGS%);''',
                                    {'%OUTPUT_OBJ%': output_obj,
                                     '%INPUT_OBJ%': input_obj,
                                     '%ARGS%': gen_arg_list(func_name, args),
                                     '%FUNC_NAME%': func_name});
-#        return (types[particles], output_obj);
         return (func_return_types[func_name], output_obj);
     
 def gen_no_apply_object(input_obj, cuts, output_obj):
@@ -603,27 +646,70 @@ def gen_no_apply_object(input_obj, cuts, output_obj):
     if len(cuts) == 0:
         obj_def = '''%s %s = %s;\n''' % (get_obj_type(input_obj), ouput_obj, input_obj)
     else:
-        cutname = "%s_%s" % (output_obj, "sel")
-        cut_expr = gen_cut_obj(cutname, cuts)
-        code_template = '''%OBJ_TYPE% %OUTPUT_OBJ%;
-for(const auto& o: %INPUT_OBJ%){
-     %CUTNAME% %CUTNAME%_;
-     if(%CUTNAME%_.accept(o)) %OUTPUT_OBJ%.push_back(o);
-}\n'''
-        subst_map = {"%INPUT_OBJ%": input_obj,
-                     "%OUTPUT_OBJ%": output_obj,
-                     "%OBJ_TYPE%": get_obj_type(input_obj),
-                     "%CUTNAME%": cut_expr}
-        obj_def += multi_replace(code_template, subst_map)
+        obj_def += gen_collection_filter_code(get_obj_type(input_obj), input_obj, cuts, output_obj)
     #endif
     return (get_obj_type(input_obj), output_obj)
         
-def gen_cut_obj(cutname, cuts):
-    """Generate code that defined a Cut class to be used in an object collection definitions."""
+#### def gen_cut_obj(cutname, cuts):
+####     """Generate code that defined a Cut class to be used in an object collection definitions."""
+####     expr = ""
+####     op = ""
+####     op2 = ""
+####     combined_cut = ""
+####     simple_cut = re.compile(r"\s*\(?(pt|E|m|rapidity|\|\s*rapidity\s*\|charge|\|\s*charge\s*\|pid|\|\s*pid\s*\|phi)\s*(<|>|<=|>=|!=|==)\s*((0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?\)?")
+####     for c in cuts:
+####         subst_map = {
+####             r"|[\s]*eta[\s]*|": "p.abseta()",
+####             r"|[\s]*rapidity[\s]*|": "p.absrapidity()",
+####             "eta": "p.eta()",
+####             "pt" : "p.pt()",
+####             "rapidity": "p.rapidity()",
+####             "charge": "p.charge()"
+####             };
+####         subst_expr = "(" + multi_replace(c, subst_map) + ")"
+####         decorted_c = c
+####         if not simple_cut.match(c):
+####             subst_expr = "(" + subst_expr + ")"
+####             decorated_c = "(" + c + ")"
+####         expr += op + subst_expr
+####         combined_cut = op2 + decorated_c
+####         op = "\n" + " "*4 + "&& ";
+####         op2 = " && ";
+####     cut_expr = compose_rivet_cuts(cutname, combined_cut)
+####     if not cut_expr:
+####         if len(cuts) == 0:
+####             cut_expr = ""
+####         else:
+####             includes.append('Rivet/Tools/Cuts.hh')
+####             subst_map = {"%CUTNAME%": cutname, "%EXPR%": expr, "%_%": indent};
+####             code = multi_replace(
+####                 """class %CUTNAME%: public CutBase {
+#### 
+#### public:
+#### 
+#### %_%bool operator==(const Cut& c) const {
+#### %_%%_%return false;
+#### %_%}
+#### 
+#### protected:
+#### 
+#### %_%template <typename ClassToCheck>
+#### %_%bool _accept(const ClassToCheck& p){
+#### %_%%_%return %EXPR%;
+#### %_%}
+#### 
+#### };
+#### """, subst_map)
+####             obj_cuts.append(code);
+####             cut_expr = cutname
+####         #endif
+####     #endif
+####     return cut_expr
+
+def gen_collection_filter_code(coltype, incol, cuts, outcol):
+    '''Generate c++ code that filters the object collection <incol> by applying cuts listed in the parameter <cuts> to produce the new collection <outcol>. Returns the generated code.'''
     expr = ""
     op = ""
-    op2 = ""
-    combined_cut = ""
     simple_cut = re.compile(r"\s*\(?(pt|E|m|rapidity|\|\s*rapidity\s*\|charge|\|\s*charge\s*\|pid|\|\s*pid\s*\|phi)\s*(<|>|<=|>=|!=|==)\s*((0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?\)?")
     for c in cuts:
         subst_map = {
@@ -633,47 +719,27 @@ def gen_cut_obj(cutname, cuts):
             "pt" : "p.pt()",
             "rapidity": "p.rapidity()",
             "charge": "p.charge()"
-            };
-        subst_expr = "(" + multi_replace(c, subst_map) + ")"
-        decorted_c = c
+        };
+        subst_expr = multi_replace(c, subst_map)
         if not simple_cut.match(c):
             subst_expr = "(" + subst_expr + ")"
-            decorated_c = "(" + c + ")"
         expr += op + subst_expr
-        combined_cut = op2 + decorated_c
-        op = "\n" + " "*4 + "&& ";
-        op2 = " && ";
-    cut_expr = compose_rivet_cuts(cutname, combined_cut)
-    if not cut_expr:
-        if len(cuts) == 0:
-            cut_expr = ""
-        else:
-            includes.append('Rivet/Tools/Cuts.hh')
-            subst_map = {"%CUTNAME%": cutname, "%EXPR%": expr, "%_%": indent};
-            code = multi_replace(
-                """class %CUTNAME%: public Rivet::CutBase {
-
-public:
-
-%_%bool operator==(const Rivet::Cut& c) const {
-%_%%_%return false;
+        op = "\n" + indent*2 + "&& ";
+    #next c
+    code = multi_replace('''%COLTYPE% %OUTCOL%;
+for(const auto& p: %INCOL%){
+%_%if(%EXPR%){
+%_%%_%%OUTCOL%.push_back(p);
 %_%}
+}
 
-protected:
+''', {'%COLTYPE%': coltype,
+       '%OUTCOL%': outcol,
+       '%INCOL%': incol,
+       '%EXPR%': expr,
+       '%_%': indent})
+    return code
 
-%_%template <typename ClassToCheck>
-%_%bool _accept(const ClassToCheck& p){
-%_%%_%return %EXPR%;
-%_%}
-
-};
-""", subst_map)
-            obj_cuts.append(code);
-            cut_expr = cutname
-        #endif
-    #endif
-    return cut_expr
-    
 def get_obj_type(cpp_obj_name):
     try:
         return types[cpp_obj_name]
@@ -728,7 +794,6 @@ def parse_object():
                 raise RuntimeError("Syntax error in line %d of file %s: the first statement of a object block must be a take statement specifying the input collection.\n\t" % (lhadafile.current_line, lhadafile.name))
             #endif
             input_collection = toks[1]
-            #FIXME: get rid of external and limit it to Particles
             if input_collection not in objects:
                 raise RuntimeError("Warning, line %d of file %s: object block %s takes as input an object collection which was not previously defined. \n\n" % (lhadafile.current_line, lhadafile.name, object_name))
             last_obj = objects[input_collection]
@@ -927,6 +992,9 @@ def parse_cut():
 
     func_name = "cut_%s" % cut_name
 
+    cutid = unique_name("k%s" % cut_name);
+    cut_ids.append(cutid)
+    
     func_code = """bool %s(){
     bool r = true;
 """ % func_name
@@ -948,11 +1016,12 @@ def parse_cut():
         #endif
         func_code += "    r &= " + parse_cut_line(" ".join(toks[1:])) + ";\n"
         #FIXME: handle duplicate names
-    func_code += '''    return r;
-}'''
+    func_code += '''    return cutflow.fill(%s, r);
+}''' % cutid
     func_codes.append(func_code)
 
 def parse_cut_line(l):
+    ''' '''
     l.strip()
     r = ""
     toks_ = re.split("([\W]+)", l)
@@ -990,6 +1059,7 @@ def parse_cut_line(l):
         "*": " * ",
         ",": ", "
     };
+
     for tok in toks:
         tok = tok.strip()
         if len(tok) == 0:
@@ -1118,6 +1188,22 @@ def canonize_analysis_name(name):
         name = "A" + name
     return name
 
+
+def gen_cutid_decl_code():
+    '''Generates c++ code which defines the cut ids used for the cutflow (cut_id_decl) and initialisation list for the Cutflow object (init). Returns (cut_id_decl, init) '''
+    code_decl = "enum {"
+    code_init = "{"
+    s = ""
+    for c in cut_ids:
+        code_decl += s + c
+        code_init += s + '"%s"' % c
+        s = ", "
+    #next c
+    code_decl += "} CutIds;"
+    code_init += "}"
+    return (code_decl, code_init)
+        
+
 def gen_code():
     global analysis_code_template, includes, include_block, objects
 
@@ -1135,12 +1221,16 @@ def gen_code():
 
     analysis_name = canonize_analysis_name(args.analysis_name)
 
+
+    (cutid_decl, cutid_init) = gen_cutid_decl_code()
+    
     # we substitude the code block in two steps in
     # order to check if the instance 'particles' is used
     # before generating the code that creates it.
     
     # Inserts complete code blocks in the code template:
     subst_map = {"%INCLUDE_BLOCK%": include_block,
+                 "%CUT_IDS%": cutid_decl,
                  "%PROJECTION_INIT%": proj_init,
                  "%COUNTER_INIT%": counter_init,
                  "%OBJECT_DEFINITIONS%": obj_def,
@@ -1152,12 +1242,18 @@ def gen_code():
                  "%CUTS%": "",
                  "%COUNTER_FILL%":""
     }
+
+    print '>>>0', analysis_code_template
     
     code = block_replace(analysis_code_template, subst_map)
 
-    subst_map = { "%ANALYSIS_NAME%": analysis_name}
-    code = multi_replace(code, subst_map)
+    print '>>>1', code
 
+    subst_map = { "%ANALYSIS_NAME%": analysis_name,
+                  "%CUTFLOW_INIT%": cutid_init}
+    code = multi_replace(code, subst_map)
+    print '>>>2', code
+    
     #check if particles objet is used
     re_particles = re.compile(r'\bparticle\b')
     re_particles_func = re.compile(r'\bparticle\s*\(')
@@ -1168,14 +1264,10 @@ def gen_code():
     else:
         particles_def = ""
         fs_proj_init = ""
-        print '>>> objects = ', objects
         objects = OrderedDict([(k, v) for k, v in objects.iteritems() if v != "particles"])
-        print '>>> objects = ', objects
 
     obj_decl = gen_object_decl()
 
-    print '>>>%s\n<<<' % obj_decl
-    
     subst_map = {"%FS_PROJ_INIT%": fs_proj_init,
                  "%PARTICLES_DEFINITION%": particles_def,
                  "%OBJECT_DECLARATION%":  obj_decl}
