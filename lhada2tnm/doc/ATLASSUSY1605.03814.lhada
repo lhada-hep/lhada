@@ -1,0 +1,234 @@
+# arxiv:1605.03814 ATLAS JetMET
+
+info analysis
+# Details about experiment
+  experiment ATLAS
+  id SUSY-2013-15
+  publication Eur. Phys. J. C(2016) 76: 392
+  sqrtS 13.0
+  lumi 3.2
+  arXiv 1605.03814
+  hepdata http://hepdata.cedar.ac.uk/view/ins1304456
+  doi 10.1140/epjc/s10052-016-4184-8
+
+function lha.Meff
+  arg jetsSR
+  arg MET
+  code ATLASSUSY1605.03814_functions.h
+
+function lha.dphijNjle3METmin
+  arg jetsSR
+  arg MET
+  code ATLASSUSY1605.03814_functions.h
+
+function lha.dphijNjgt3METmin
+  arg jetsSR
+  arg MET
+  code ATLASSUSY1605.03814_functions.h
+
+function lha.METovermeffNJ
+  arg jetsSR
+  arg njets
+  arg MET
+  code ATLASSUSY1605.03814_functions.h
+
+function lha.METoversqrtHT
+  arg jetsSR
+  arg MET
+  code ATLASSUSY1605.03814_functions.h
+
+function lha.aplanarity
+  arg jetsSR
+  code ATLASSUSY1605.03814_functions.h
+
+function lha.dR
+   arg Eta1
+   arg Phi1
+   arg Eta2
+   arg Phi2
+   code ATLASSUSY1605.03814_functions.h
+  
+# OBJECT SELECTIONS
+
+object jets 
+# Delphes jets
+  take Delphes_Jet
+  select PT > 20
+  select |Eta| < 2.8
+
+object cleanjets
+  take jets
+  loop electrons e
+  apply lha.dR(Eta, Phi, e.Eta, e.Phi) dRje
+  reject dRje < 0.2
+
+object bjets
+# b-tagging jets
+  take jets
+  select BTag = 1
+  select PT > 50
+  select |Eta| < 2.5
+
+object muons
+# Muons
+  take Delphes_Muon
+  select PT > 10
+  select |Eta| < 2.7
+  select IsolationVarRhoCorr < 0.1
+  #select isol(src=tracks, dR=0.4, reliso=true)<0.1
+
+
+object cleanmuons
+  take muons
+  loop cleanjets j
+  apply lha.dR(Eta, Phi, j.Eta, j.Phi) dRlj
+  reject dRlj < 0.4
+
+
+object electrons
+# loose electrons
+  take Delphes_Electron
+  select PT > 10
+  select |Eta| < 2.47
+
+object cleanelectrons
+  take electrons
+  loop cleanjets j
+  apply lha.dR(Eta, Phi, j.Eta, j.Phi) dRlj
+  reject dRlj < 0.4
+
+object verycleanelectrons
+  take cleanelectrons
+  loop cleanelectrons e
+  apply lha.dR(Eta, Phi, e.Eta, e.Phi) dRee
+  reject (dRee < 0.05) and (PT < e.PT)
+
+object MET
+  take Delphes_MissingET
+
+object jetsSR
+  take cleanjets
+  select PT > 50
+
+# EVENT VARIABLES
+
+variable Meff
+  apply lha.Meff(jetsSR, MET)
+
+variable dphijNjle3METmin
+  apply lha.dphijNjle3METmin(jetsSR, MET)  
+
+variable dphijNjgt3METmin
+  apply lha.dphijNjgt3METmin(jetsSR, MET)  
+
+variable METoversqrtHT
+  apply lha.METoversqrtHT(jetsSR, MET)
+
+variable METovermeff2j
+  apply lha.METovermeffNJ(jetsSR, 2, MET)
+
+variable METovermeff4j
+  apply lha.METovermeffNJ(jetsSR, 4, MET)
+
+variable METovermeff5j
+  apply lha.METovermeffNJ(jetsSR, 5, MET)
+
+variable METovermeff6j
+  apply lha.METovermeffNJ(jetsSR, 6, MET)
+
+variable aplanarity
+  apply lha.aplanarity(jetsSR)
+
+
+# EVENT SELECTION
+
+cut preselection
+# Pre-selection cuts
+  select MET.PT > 200  
+  reject cleanmuons.PT > 10 
+  reject verycleanelectrons.PT > 10
+  select jetsSR.size > 0
+
+cut 2jl
+  select preselection
+  select jetsSR.size >= 2
+  select jetsSR[0].PT > 200
+  select jetsSR[1].PT > 200
+  select dphijNjle3METmin > 0.8
+  select METoversqrtHT > 15
+  select Meff > 1200  
+
+cut 2jm
+  select preselection
+  select jetsSR.size >= 2
+  select jetsSR[0].PT > 300
+  select jetsSR[1].PT > 50
+  select dphijNjle3METmin > 0.4
+  select METoversqrtHT > 15
+  select Meff > 1600  
+
+cut 2jt
+  select preselection
+  select jetsSR.size >= 2
+  select jetsSR[0].PT > 200
+  select jetsSR[1].PT > 200
+  select dphijNjle3METmin > 0.8
+  select METoversqrtHT > 20
+  select Meff > 2000
+
+cut 4jt
+  select preselection
+  select jetsSR.size >= 4
+  select jetsSR[0].PT > 200
+  select jetsSR[1].PT > 100
+  select jetsSR[2].PT > 100
+  select jetsSR[3].PT > 100
+  select dphijNjle3METmin > 0.4
+  select dphijNjgt3METmin > 0.2
+  select aplanarity > 0.04
+  select METovermeff4j > 0.2
+  select Meff > 2200
+
+cut 5j
+  select preselection
+  select jetsSR.size >= 5
+  select jetsSR[0].PT > 200
+  select jetsSR[1].PT > 100
+  select jetsSR[2].PT > 100
+  select jetsSR[3].PT > 100
+  select jetsSR[4].PT > 50
+  select dphijNjle3METmin > 0.4
+  select dphijNjgt3METmin > 0.2
+  select aplanarity > 0.04
+  select METovermeff5j > 0.25
+  select Meff > 1600
+
+cut 6jm
+  select preselection
+  select jetsSR.size >= 6
+  select jetsSR[0].PT > 200
+  select jetsSR[1].PT > 100
+  select jetsSR[2].PT > 100
+  select jetsSR[3].PT > 100
+  select jetsSR[4].PT > 50
+  select jetsSR[5].PT > 50
+  select dphijNjle3METmin > 0.4
+  select dphijNjgt3METmin > 0.2
+  select aplanarity > 0.04
+  select METovermeff6j > 0.25
+  select Meff > 1600
+
+cut 6jt
+  select preselection
+  select jetsSR.size >= 6
+  select jetsSR[0].PT > 200
+  select jetsSR[1].PT > 100
+  select jetsSR[2].PT > 100
+  select jetsSR[3].PT > 100
+  select jetsSR[4].PT > 50
+  select jetsSR[5].PT > 50
+  select dphijNjle3METmin > 0.4
+  select dphijNjgt3METmin > 0.2
+  select aplanarity > 0.04
+  select METovermeff6j > 0.2
+  select Meff > 2000
