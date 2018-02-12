@@ -7,8 +7,6 @@ ifndef ROOTSYS
 $(error *** Please set up Root)
 endif
 
-name    := analyzer
-
 # Sub-directories
 srcdir	:= src
 tmpdir	:= tmp
@@ -28,7 +26,7 @@ endif
 #-----------------------------------------------------------------------
 # sources and objects
 #-----------------------------------------------------------------------
-header  := $(incdir)/tnm.h $(incdir)/LHParticle.h $(incdir)/DelphesAdapter.h
+header  := $(incdir)/tnm.h $(incdir)/TEParticle.h $(incdir)/DelphesAdapter.h
 linkdef := $(incdir)/linkdef.h
 cinthdr := $(srcdir)/dictionary.h
 cintsrc := $(srcdir)/dictionary.cc

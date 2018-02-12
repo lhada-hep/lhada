@@ -13,10 +13,10 @@
 //	hepdata     	http://hepdata.cedar.ac.uk/view/ins1304456
 //	doi         	10.1140/epjc/s10052-016-4184-8
 //
-// Created:     Fri Feb  9 23:00:30 2018 by lhada2tnm.py
+// Created:     Sun Feb 11 19:37:54 2018 by lhada2tnm.py
 //----------------------------------------------------------------------------
 #include "tnm.h"
-#include "LHParticle.h"
+#include "TEParticle.h"
 #include "DelphesAdapter.h"
 #include "ATLASSUSY1605.03814_functions.h"
 
@@ -26,11 +26,11 @@ using namespace std;
 //----------------------------------------------------------------------------
 //
 // functions
-double	lha_aplanarity(std::vector<LHParticle>& jetsSR)
+double	lha_aplanarity(std::vector<TEParticle>& jetsSR)
 {
   return lha::aplanarity(jetsSR);
 };
-double	lha_Meff(std::vector<LHParticle>& jetsSR, LHParticle& MET)
+double	lha_Meff(std::vector<TEParticle>& jetsSR, TEParticle& MET)
 {
   return lha::Meff(jetsSR, MET);
 };
@@ -38,45 +38,45 @@ double	lha_dR(double Eta1, double Phi1, double Eta2, double Phi2)
 {
   return lha::dR(Eta1, Phi1, Eta2, Phi2);
 };
-double	lha_METovermeffNJ(std::vector<LHParticle>& jetsSR, int njets, LHParticle& MET)
+double	lha_METovermeffNJ(std::vector<TEParticle>& jetsSR, int njets, TEParticle& MET)
 {
   return lha::METovermeffNJ(jetsSR, njets, MET);
 };
-double	lha_dphijNjgt3METmin(std::vector<LHParticle>& jetsSR, LHParticle& MET)
+double	lha_dphijNjgt3METmin(std::vector<TEParticle>& jetsSR, TEParticle& MET)
 {
   return lha::dphijNjgt3METmin(jetsSR, MET);
 };
-double	lha_METoversqrtHT(std::vector<LHParticle>& jetsSR, LHParticle& MET)
+double	lha_METoversqrtHT(std::vector<TEParticle>& jetsSR, TEParticle& MET)
 {
   return lha::METoversqrtHT(jetsSR, MET);
 };
-double	lha_dphijNjle3METmin(std::vector<LHParticle>& jetsSR, LHParticle& MET)
+double	lha_dphijNjle3METmin(std::vector<TEParticle>& jetsSR, TEParticle& MET)
 {
   return lha::dphijNjle3METmin(jetsSR, MET);
 };
 
 //----------------------------------------------------------------------------
 // external objects
-vector<LHParticle> Delphes_Muon;
-vector<LHParticle> Delphes_Electron;
-vector<LHParticle> Delphes_Jet;
+vector<TEParticle> Delphes_Muon;
+vector<TEParticle> Delphes_Electron;
+vector<TEParticle> Delphes_Jet;
 
-LHParticle Delphes_MissingET;
+TEParticle Delphes_MissingET;
 
 
 // internal objects
-vector<LHParticle> muons;
-vector<LHParticle> electrons;
-vector<LHParticle> jets;
+vector<TEParticle> muons;
+vector<TEParticle> electrons;
+vector<TEParticle> jets;
 
-LHParticle MET;
+TEParticle MET;
 
-vector<LHParticle> bjets;
-vector<LHParticle> cleanjets;
-vector<LHParticle> cleanelectrons;
-vector<LHParticle> verycleanelectrons;
-vector<LHParticle> jetsSR;
-vector<LHParticle> cleanmuons;
+vector<TEParticle> bjets;
+vector<TEParticle> cleanjets;
+vector<TEParticle> cleanelectrons;
+vector<TEParticle> verycleanelectrons;
+vector<TEParticle> jetsSR;
+vector<TEParticle> cleanmuons;
 
 
 // object definitions
@@ -96,7 +96,7 @@ struct object_muons_s : public lhadaThing
     muons.clear();
     for(size_t c=0; c < Delphes_Muon.size(); c++)
       {
-        LHParticle& p = Delphes_Muon[c];
+        TEParticle& p = Delphes_Muon[c];
         if ( !(p("PT") > 10) ) continue;
         if ( !(p("|Eta|") < 2.7) ) continue;
         if ( !(p("IsolationVarRhoCorr") < 0.1) ) continue;
@@ -114,7 +114,7 @@ struct object_electrons_s : public lhadaThing
     electrons.clear();
     for(size_t c=0; c < Delphes_Electron.size(); c++)
       {
-        LHParticle& p = Delphes_Electron[c];
+        TEParticle& p = Delphes_Electron[c];
         if ( !(p("PT") > 10) ) continue;
         if ( !(p("|Eta|") < 2.47) ) continue;
         electrons.push_back(p);
@@ -131,7 +131,7 @@ struct object_jets_s : public lhadaThing
     jets.clear();
     for(size_t c=0; c < Delphes_Jet.size(); c++)
       {
-        LHParticle& p = Delphes_Jet[c];
+        TEParticle& p = Delphes_Jet[c];
         if ( !(p("PT") > 20) ) continue;
         if ( !(p("|Eta|") < 2.8) ) continue;
         jets.push_back(p);
@@ -158,7 +158,7 @@ struct object_bjets_s : public lhadaThing
     bjets.clear();
     for(size_t c=0; c < jets.size(); c++)
       {
-        LHParticle& p = jets[c];
+        TEParticle& p = jets[c];
         if ( !(p("BTag") == 1) ) continue;
         if ( !(p("PT") > 50) ) continue;
         if ( !(p("|Eta|") < 2.5) ) continue;
@@ -176,11 +176,11 @@ struct object_cleanjets_s : public lhadaThing
     cleanjets.clear();
     for(size_t c=0; c < jets.size(); c++)
       {
-        LHParticle& p = jets[c];
+        TEParticle& p = jets[c];
         bool skip = false;
         for(size_t ec=0; ec < electrons.size(); ec++)
           {
-            LHParticle& e = electrons[ec];
+            TEParticle& e = electrons[ec];
             double dRje = lha_dR(p("Eta"), p("Phi"), e("Eta"), e("Phi"));
             p("dRje", dRje);
             if ( p("dRje") < 0.2 )
@@ -204,11 +204,11 @@ struct object_cleanelectrons_s : public lhadaThing
     cleanelectrons.clear();
     for(size_t c=0; c < electrons.size(); c++)
       {
-        LHParticle& p = electrons[c];
+        TEParticle& p = electrons[c];
         bool skip = false;
         for(size_t jc=0; jc < cleanjets.size(); jc++)
           {
-            LHParticle& j = cleanjets[jc];
+            TEParticle& j = cleanjets[jc];
             double dRlj = lha_dR(p("Eta"), p("Phi"), j("Eta"), j("Phi"));
             p("dRlj", dRlj);
             if ( p("dRlj") < 0.4 )
@@ -232,11 +232,11 @@ struct object_verycleanelectrons_s : public lhadaThing
     verycleanelectrons.clear();
     for(size_t c=0; c < cleanelectrons.size(); c++)
       {
-        LHParticle& p = cleanelectrons[c];
+        TEParticle& p = cleanelectrons[c];
         bool skip = false;
         for(size_t ec=0; ec < cleanelectrons.size(); ec++)
           {
-            LHParticle& e = cleanelectrons[ec];
+            TEParticle& e = cleanelectrons[ec];
             double dRee = lha_dR(p("Eta"), p("Phi"), e("Eta"), e("Phi"));
             p("dRee", dRee);
             if ( (p("dRee") < 0.05) && (p("PT") < e("PT")) )
@@ -260,7 +260,7 @@ struct object_jetsSR_s : public lhadaThing
     jetsSR.clear();
     for(size_t c=0; c < cleanjets.size(); c++)
       {
-        LHParticle& p = cleanjets[c];
+        TEParticle& p = cleanjets[c];
         if ( !(p("PT") > 50) ) continue;
         jetsSR.push_back(p);
       }
@@ -276,11 +276,11 @@ struct object_cleanmuons_s : public lhadaThing
     cleanmuons.clear();
     for(size_t c=0; c < muons.size(); c++)
       {
-        LHParticle& p = muons[c];
+        TEParticle& p = muons[c];
         bool skip = false;
         for(size_t jc=0; jc < cleanjets.size(); jc++)
           {
-            LHParticle& j = cleanjets[jc];
+            TEParticle& j = cleanjets[jc];
             double dRlj = lha_dR(p("Eta"), p("Phi"), j("Eta"), j("Phi"));
             p("dRlj", dRlj);
             if ( p("dRlj") < 0.4 )

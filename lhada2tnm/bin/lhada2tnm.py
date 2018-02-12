@@ -60,7 +60,7 @@ TEMPLATE_CC =\
 // Created:     %(time)s by lhada2tnm.py
 //----------------------------------------------------------------------------
 #include "tnm.h"
-#include "LHParticle.h"
+#include "TEParticle.h"
 #include "%(adaptername)s.h"
 %(includes)s
 using namespace std;
@@ -649,7 +649,7 @@ def process_multiple_objects(name, records, TAB, blocktypes):
             # --------------------------------------------            
             objdef += '%sfor(size_t c=0; c < %s.size(); c++)\n' % (tab, value)
             objdef += '%s  {\n' % tab
-            objdef += '%s%sLHParticle& p = %s[c];\n' % (tab, tab4, value)
+            objdef += '%s%sTEParticle& p = %s[c];\n' % (tab, tab4, value)
 
         elif token == 'loop':
             # --------------------------------------------            
@@ -674,7 +674,7 @@ perhaps you're missing a loop variable in:
             objdef += '%sfor(size_t %sc=0; %sc < %s.size(); %sc++)\n' % \
               (tab, loopidx, loopidx, loopobj, loopidx)
             objdef += '%s  {\n' % tab
-            objdef += '%s%sLHParticle& %s = %s[%sc];\n' % \
+            objdef += '%s%sTEParticle& %s = %s[%sc];\n' % \
               (tab, tab4, loopidx, loopobj, loopidx)
 
             # cache loop variables
@@ -784,14 +784,14 @@ def process_objects(names, blocks, blocktypes):
                 if objname not in blocktypes['object']:
                     extobj.add(objname)
                     if single.findall(lower(objname)) == []:
-                        extobjdef += 'vector<LHParticle> %s;\n' % objname
+                        extobjdef += 'vector<TEParticle> %s;\n' % objname
                     else:
-                        extobjdef += '\nLHParticle %s;\n\n' % objname
+                        extobjdef += '\nTEParticle %s;\n\n' % objname
 
         if single.findall(lower(name)) == []:                        
-            intobjdef += 'vector<LHParticle> %s;\n' % name
+            intobjdef += 'vector<TEParticle> %s;\n' % name
         else:
-            intobjdef += '\nLHParticle %s;\n\n' % name
+            intobjdef += '\nTEParticle %s;\n\n' % name
             
         intobjimpl += '%sobject_%s();\n' % (tab6, name)
         

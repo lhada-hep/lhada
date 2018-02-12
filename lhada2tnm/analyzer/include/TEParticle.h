@@ -1,9 +1,8 @@
-#ifndef LHPARTICLE_H
-#define LHPARTICLE_H
+#ifndef TEPARTICLE_H
+#define TEPARTICLE_H
 // ---------------------------------------------------------------------------
-// File: LHParticle.h
-// Description: prototype of a generic Les Houches particle class for use in
-//              Les Houches analysis description.
+// File: TEParticle.h
+// Description: Prototype of a generic LHADA particle class.
 // created: Les Houches 2015 HBP
 // ---------------------------------------------------------------------------
 #include <iostream>
@@ -12,21 +11,21 @@
 #include "TROOT.h"
 #include "TLorentzVector.h"
 // ---------------------------------------------------------------------------
-struct LHParticle : public TLorentzVector
+struct TEParticle : public TLorentzVector
 {
-  LHParticle();
-  LHParticle(int PID_,
+  TEParticle();
+  TEParticle(int PID_,
 	     double PT, double Eta, double Phi, double Mass=0);
-  LHParticle(const LHParticle& p);
-  ~LHParticle();
+  TEParticle(const TEParticle& p);
+  ~TEParticle();
 
   static std::string name(int pdgid);
   
-  bool        operator<(const LHParticle& p) const;
-  LHParticle& operator=(const LHParticle& p);
-  LHParticle  operator+(const LHParticle& o) const;
-  LHParticle  operator-(const LHParticle& o) const;
-  LHParticle  operator*(double a) const;
+  bool        operator<(const TEParticle& p) const;
+  TEParticle& operator=(const TEParticle& p);
+  TEParticle  operator+(const TEParticle& o) const;
+  TEParticle  operator-(const TEParticle& o) const;
+  TEParticle  operator*(double a) const;
 
   double      operator()(std::string varname);
 
@@ -45,8 +44,8 @@ struct LHParticle : public TLorentzVector
   
   static int s_UID;
 
-  ClassDef(LHParticle,0)
+  ClassDef(TEParticle,0)
 };
-std::ostream& operator<<(std::ostream& os, const LHParticle& o);
+std::ostream& operator<<(std::ostream& os, const TEParticle& o);
 
 #endif

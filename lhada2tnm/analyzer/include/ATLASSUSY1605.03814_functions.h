@@ -3,11 +3,11 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
-#include "LHParticle.h"
+#include "TEParticle.h"
 
 namespace lha
 {
-  double Meff(std::vector<LHParticle>& jets, LHParticle& MET) {
+  double Meff(std::vector<TEParticle>& jets, TEParticle& MET) {
     double meff = MET.Pt();
     for (size_t i=0; i<jets.size(); i++) {
       meff += jets[i].Pt();
@@ -15,7 +15,7 @@ namespace lha
     return meff;
   }
 
-  double dphijNjle3METmin(std::vector<LHParticle>& jets, LHParticle& MET) {
+  double dphijNjle3METmin(std::vector<TEParticle>& jets, TEParticle& MET) {
     if (jets.size() < 2)
       return 0;
     int njets = 3;
@@ -28,7 +28,7 @@ namespace lha
     return dphimin;
   }
 
-  double dphijNjgt3METmin(std::vector<LHParticle>& jets, LHParticle& MET) {
+  double dphijNjgt3METmin(std::vector<TEParticle>& jets, TEParticle& MET) {
     double dphimin = 999;
     if (jets.size() <= (size_t)3) 
       return 0;
@@ -39,8 +39,8 @@ namespace lha
     return dphimin;
   }
   
-  double METovermeffNJ(std::vector<LHParticle>& jets,
-		       int njets, LHParticle& MET) {
+  double METovermeffNJ(std::vector<TEParticle>& jets,
+		       int njets, TEParticle& MET) {
     if (jets.size() < (size_t)njets) {
       std::cout << "Not enough jets" << std::endl;
       return 0;
@@ -52,7 +52,7 @@ namespace lha
     return MET.Pt() / meff;
   }
 
-  double METoversqrtHT(std::vector<LHParticle>& jets, LHParticle& MET) {
+  double METoversqrtHT(std::vector<TEParticle>& jets, TEParticle& MET) {
     double HT = 0;
     for (size_t i=0; i<jets.size(); i++) {
       HT += jets[i].Pt();
@@ -60,7 +60,7 @@ namespace lha
     return MET.Pt() / sqrt(HT);
   }
   
-  double aplanarity(std::vector<LHParticle>& jets) {
+  double aplanarity(std::vector<TEParticle>& jets) {
     // to be filled in
     return 0;
   }

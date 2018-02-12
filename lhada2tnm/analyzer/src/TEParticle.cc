@@ -1,7 +1,6 @@
 // ---------------------------------------------------------------------------
-// File: LHParticle.cc
-// Description: prototype of a generic particle class for use in Les Houches
-//              analysis description.
+// File: TEParticle.cc
+// Description: Prototype of a generic LHADA particle class.
 // created: Les Houches 2015 HBP
 // ---------------------------------------------------------------------------
 #include <algorithm>
@@ -9,13 +8,13 @@
 #include <sstream>
 #include <string>
 #include <map>
-#include "LHParticle.h"
+#include "TEParticle.h"
 
 using namespace std;
 
-int LHParticle::s_UID=0;
+int TEParticle::s_UID=0;
 
-LHParticle::LHParticle()
+TEParticle::TEParticle()
   : TLorentzVector(),
     UID(++s_UID),
     PID(0),
@@ -29,7 +28,7 @@ LHParticle::LHParticle()
     Value(std::map<std::string, double>())
 {}
 
-LHParticle::LHParticle(int PID_, 
+TEParticle::TEParticle(int PID_, 
 		       double pt, double eta, double phi, double mass)
   : TLorentzVector(),
     UID(++s_UID),
@@ -39,7 +38,7 @@ LHParticle::LHParticle(int PID_,
     Mother(0),
     Skip(false),
     Order(pt), // default is to order in pT
-    Name(LHParticle::name(PID_)),
+    Name(TEParticle::name(PID_)),
     Daughters(std::vector<int>()),
     Value(std::map<std::string, double>())
 {
@@ -55,7 +54,7 @@ LHParticle::LHParticle(int PID_,
 }
 
 
-LHParticle::LHParticle(const LHParticle& p)
+TEParticle::TEParticle(const TEParticle& p)
   : TLorentzVector(),
     UID(p.UID),
     PID(p.PID),
@@ -80,19 +79,19 @@ LHParticle::LHParticle(const LHParticle& p)
 }
 
 
-LHParticle::~LHParticle() {}
+TEParticle::~TEParticle() {}
 
 // Order in decreasing value of Order parameter
-bool LHParticle::operator<(const LHParticle& p) const
+bool TEParticle::operator<(const TEParticle& p) const
 {
   return p.Order < this->Order;
 }
 
-LHParticle& LHParticle::operator=(const LHParticle& rhs)
+TEParticle& TEParticle::operator=(const TEParticle& rhs)
 {
   if ( this != &rhs )
     {
-      LHParticle p(rhs); // call copy constructor
+      TEParticle p(rhs); // call copy constructor
       SetPtEtaPhiM(p.Pt(), p.Eta(), p.Phi(), p.M());
       UID    = p.UID;
       PID    = p.PID;
@@ -108,12 +107,12 @@ LHParticle& LHParticle::operator=(const LHParticle& rhs)
   return *this;
 }
 
-LHParticle LHParticle::operator+(const LHParticle& o) const
+TEParticle TEParticle::operator+(const TEParticle& o) const
 {
   const TLorentzVector* p1 = dynamic_cast<const TLorentzVector*>(this);
   const TLorentzVector* p2 = dynamic_cast<const TLorentzVector*>(&o);
   TLorentzVector  p  = *p1 + *p2;
-  LHParticle q(0, p.Pt(), p.Eta(), p.Phi(), p.M());
+  TEParticle q(0, p.Pt(), p.Eta(), p.Phi(), p.M());
   q.Name = string(this->Name + "/" + o.Name);
   q.PID  = abs(this->PID);
 
@@ -128,12 +127,12 @@ LHParticle LHParticle::operator+(const LHParticle& o) const
   return q;
 }
 
-LHParticle LHParticle::operator-(const LHParticle& o) const
+TEParticle TEParticle::operator-(const TEParticle& o) const
 {
   const TLorentzVector* p1 = dynamic_cast<const TLorentzVector*>(this);
   const TLorentzVector* p2 = dynamic_cast<const TLorentzVector*>(&o);
   TLorentzVector  p  = *p1 - *p2;
-  LHParticle q(0, p.Pt(), p.Eta(), p.Phi(), p.M());
+  TEParticle q(0, p.Pt(), p.Eta(), p.Phi(), p.M());
   q.Name = string(this->Name + "/" + o.Name);
   q.PID  = abs(this->PID);
 
@@ -148,14 +147,14 @@ LHParticle LHParticle::operator-(const LHParticle& o) const
   return q;  
 }
 
-LHParticle LHParticle::operator*(double a) const
+TEParticle TEParticle::operator*(double a) const
 {
   TLorentzVector p = a * (*dynamic_cast<const TLorentzVector*>(this));
-  return LHParticle(PID, p.Pt(), p.Eta(), p.Phi(), p.M());
+  return TEParticle(PID, p.Pt(), p.Eta(), p.Phi(), p.M());
 }
 
 
-double LHParticle::operator()(std::string a)
+double TEParticle::operator()(std::string a)
 {
   try
     {
@@ -167,13 +166,13 @@ double LHParticle::operator()(std::string a)
     }
 }
 
-void LHParticle::operator()(std::string a, double x)
+void TEParticle::operator()(std::string a, double x)
 {
   Value[a] = x;
 }
 
 
-std::ostream& operator<<(std::ostream& os, const LHParticle& o)
+std::ostream& operator<<(std::ostream& os, const TEParticle& o)
 {
   string str;
   char rec[8];
@@ -201,7 +200,7 @@ namespace {
   static bool firstName=true;
   static map<int, string>  namemap;
 }
-string LHParticle::name(int pdgid)
+string TEParticle::name(int pdgid)
 {
   if ( firstName )
     {

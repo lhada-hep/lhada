@@ -25,7 +25,8 @@
 #pragma link C++ class commandLine;
 #pragma link C++ class matchedPair;
 #pragma link C++ class ptThing;
-#pragma link C++ class LHParticle;
+#pragma link C++ class TEParticle;
+#pragma link C++ class vector<TEParticle>;
 
 #pragma link C++ class itreestream;
 #pragma link C++ class otreestream;

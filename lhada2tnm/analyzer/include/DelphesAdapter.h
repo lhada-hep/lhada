@@ -4,14 +4,14 @@
 #include <vector>
 #include <string>
 #include "tnm.h"
-#include "LHParticle.h"
+#include "TEParticle.h"
 
 struct DelphesAdapter
 {
   DelphesAdapter();
   ~DelphesAdapter();
-  void operator()(eventBuffer& ev, std::string a, std::vector<LHParticle>& p);
-  void operator()(eventBuffer& ev, std::string a, LHParticle& p);
+  void operator()(eventBuffer& ev, std::string a, std::vector<TEParticle>& p);
+  void operator()(eventBuffer& ev, std::string a, TEParticle& p);
 };
 
 #endif

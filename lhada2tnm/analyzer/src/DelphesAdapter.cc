@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // File: DelphesAdapter.cc
-// Description: map Delphes objects to LHParticles
+// Description: map Delphes objects to TEParticles
 // created: 02-Feb-2018 Harrison B. Prosper
 // ---------------------------------------------------------------------------
 #include <algorithm>
@@ -23,7 +23,7 @@ DelphesAdapter::~DelphesAdapter()
 }
 
 
-void DelphesAdapter::operator()(eventBuffer& ev, std::string name, std::vector<LHParticle>& p)
+void DelphesAdapter::operator()(eventBuffer& ev, std::string name, std::vector<TEParticle>& p)
 {
   TString key(name.c_str());
   key.ToLower();
@@ -33,7 +33,7 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name, std::vector<L
     {
       for (size_t c=0; c < ev.Muon_PT.size(); c++)
 	{
-	  p.push_back(LHParticle(-13*ev.Muon_Charge[c],
+	  p.push_back(TEParticle(-13*ev.Muon_Charge[c],
 				 ev.Muon_PT[c],
 				 ev.Muon_Eta[c],
 				 ev.Muon_Phi[c],
@@ -45,7 +45,7 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name, std::vector<L
     {
       for (size_t c=0; c < ev.Electron_PT.size(); c++)
 	{
-	  p.push_back(LHParticle(-11*ev.Electron_Charge[c],
+	  p.push_back(TEParticle(-11*ev.Electron_Charge[c],
 				 ev.Electron_PT[c],
 				 ev.Electron_Eta[c],
 				 ev.Electron_Phi[c],
@@ -57,7 +57,7 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name, std::vector<L
     {
       for (size_t c=0; c < ev.Jet_PT.size(); c++)
 	{
-	  p.push_back(LHParticle(81,
+	  p.push_back(TEParticle(81,
 				 ev.Jet_PT[c],
 				 ev.Jet_Eta[c],
 				 ev.Jet_Phi[c],
@@ -81,13 +81,13 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name, std::vector<L
 	}      
     }
 }
-void DelphesAdapter::operator()(eventBuffer& ev, std::string name, LHParticle& p)
+void DelphesAdapter::operator()(eventBuffer& ev, std::string name, TEParticle& p)
 {
   TString key(name.c_str());
   key.ToLower();  
   if ( key.Contains("met") )
     {
-      LHParticle q(81, ev.MissingET_MET, ev.MissingET_Eta, ev.MissingET_Phi, 0);
+      TEParticle q(81, ev.MissingET_MET, ev.MissingET_Eta, ev.MissingET_Phi, 0);
       p = q;
     }
 }
