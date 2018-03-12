@@ -3,12 +3,14 @@
 import re
 import argparse
 import sys
+import os.path
+import subprocess
 from collections import OrderedDict
 
 
 indent = ' ' * 2
 
-block_start = re.compile(r'object|cut|region|function|table')
+block_start = re.compile(r'object|collection|variable|cut|region|function|table')
 re_indented = re.compile(r'^\s')
 
 analysis_code_template = """// -*- C++ -*-
@@ -134,6 +136,12 @@ tables = {}
 table_types = ["events", "limits", "cutflow", "corr", "bkg"]
 histo_booking = ""
 
+#command to compile provided c++ code
+compile_cmd = ["g++", "-c", "-I../code_lib/include" ]
+
+#Meta information on the analysis read from "info analysis" Lhada block
+ana_info = {}
+
 #list of cuts used to define object collection
 obj_cuts = []
 
@@ -143,7 +151,7 @@ cut_ids = []
 #list of objects defined in LHADA file. Associate object name with its c++-code name mapped_name
 #In same rare case the two name can differ.
 particles = "particles"
-objects = OrderedDict([("external", particles), ("Particles", particles)])
+objects = OrderedDict([("Particles", particles)])
 
 #Map object (cpp name) to types including intermediat object, i.e. not defined in LHADA file.
 types = { particles: "Particles"}
@@ -155,7 +163,201 @@ cuts = []
 functions = []
 
 #return types of defined functions listed in functions
+#If the value (v) is a int then it refers to the type of
+#the (v+1)-nth argument: the function is templated and
+#returns an instance of the same type as this argument.
+#In case of a fixed return type the c type name is specified
+#as a string
 func_return_types = {}
+
+jetAk04Eta48Proj = None
+atlasCaloFs = None
+
+#Flag indicating if a cast operator from Vector3 to FourMomentum is required
+vector3ToFourMometum = False
+
+#List of code files accompagnying the lhada description
+#Code validity is checked before adding the file to the list
+code_files = []
+
+#different ways to call a LHADA object block:
+object_aliases = ["object", "variable", "collection"]
+
+#list of include files to exclude from generated code
+#(because of replacement with Rivet functionnality)
+excluded_includes = [ "LhadaParticle.h", "LhadaJet.h", "FourMomentum.h", "lhada_tools.h" ]
+
+def tonth(i):
+    '''convert number 1, 2, 3, etc. to 1st, 2nd, 3rd, etc'''
+    a = ["0th", "1st", "2nd", "3rd" ]
+    if i < len(a):
+        return a[i]
+    else:
+        return "%dth" % i
+
+def gen_RecoObj(object, partName, etaAcc, effTag, smearTag, cuts):
+    includes.append("Rivet/Tools/SmearingFunctions.hh")
+    pidName = partName.upper()
+    truthParts = unique_name("Truth%ss" % partName)
+    truthPartFS = unique_name("Truth%sFS" % partName) 
+    proj_init = multi_replace('''PromptFinalState %TRUTH_PART_FS%(Cuts::abseta < %ETA_ACC% && Cuts::abspid == PID::%PID_NAME%, true, true);
+declare(%TRUTH_PART_FS%, "%TRUTH_PARTS%");
+declare(SmearedParticles(es, %EFF_TAG%, %SMEAR_TAG%), %OBJECT%)''',
+                                { "%TRUTH_PART_FS%": truthPartFS, \
+                                  "%EFF_TAG%": effTag, \
+                                  "%SMEAR_TAG%": smearTag, \
+                                  "%ETA_ACC%": etaAcc, \
+                                  "%PID_NAME%": pidName, \
+                                  "%TRUTH_PARTS%": truthParts, \
+                                  "%OBJECT%": object
+                                })
+    #FIXME: postpone the projection until the object is used, so we can includes the cuts
+    #and avoid an intermediate object ?
+    if cuts is None:
+        cuts = ""
+    obj_def = multi_replace('''%OBJECT% = applyProjection<ParticleFinder>(event, "%OBJECT%").particles(%CUTS%)
+''', { "%OBJECT%": object, \
+       "%CUTS%": cuts});
+    return ("Particles", object)
+#enddef
+
+def gen_ElectronAtlas_00(object, cuts):
+    return gen_RecoObj(object, "Electron", "2.5", "ELECTRON_EFF_ATLAS_RUN2", "ELECTRON_SMEAR_ATLAS_RUN2", cuts)
+
+def gen_MuonAtlas_00(object, cuts):
+    return gen_RecoObj(object, "Muon", "2.7", "MUON_EFF_ATLAS_RUN2", "MUON_SMEAR_ATLAS_RUN2", cuts)
+
+def gen_ElectronCms_00(object, cuts):
+    return gen_RecoObj(object, "Electron", "2.5", "ELECTRON_EFF_CMS_RUN2", "ELECTRON_SMEAR_CMS_RUN2", cuts)
+
+def gen_MuonCms_00(object, cuts):
+    return gen_RecoObj(object, "Muon", "2.7", "MUON_EFF_CMS_RUN2", "MUON_SMEAR_CMS_RUN2", cuts)
+
+
+### def gen_ElectronAtlas_00(object):
+###     truthElectrons = unique_name("TruthElectrons")
+###     truthElectronFS = unique_name("TruthElectronFS") 
+###     proj_init = multi_replace('''PromptFinalState es(Cuts::abseta < 2.5 && Cuts::abspid == PID::ELECTRON, true, true);
+### declare(%TRUTH_ELECTRON_FS%, "%TRUTH_ELECTRONS%");
+### declare(SmearedParticles(es, ELECTRON_EFF_ATLAS_RUN2, ELECTRON_SMEAR_ATLAS_RUN2), %OBJECT%)''',
+###                                 { "%TRUTH_ELECTRON_FS%": truthElectronFS, \
+###                                   "%TRUTH_ELECTRONS%": truthElectrons, \
+###                                   "%OBJECT%", object
+###                                 })
+###     #FIXME: postpone the projection until the object is used, so we can includes the cuts
+###     #and avoid an intermediate object ?
+###     obj_def = multi_replace('''%OBJECT% = apply<ParticleFinder>(event, "%OBJECT%").particles()
+### ''', { "%OBJECT%": object});
+###     return ("Particles", object)
+### #enddef
+### 
+### def gen_MuonAtlas_00(object, uid):
+###     truthMuons = unique_name("TruthMuons")
+###     truthMuonFS = unique_name("TruthMuonFS") 
+###     proj_init = multi_replace('''PromptFinalState es(Cuts::abseta < 2.5 && Cuts::abspid == PID::MUON, true, true);
+### declare(%TRUTH_MUON_FS%, "%TRUTH_MUONS%");
+### declare(SmearedParticles(es, MUON_EFF_ATLAS_RUN2, MUON_SMEAR_ATLAS_RUN2), %OBJECT%)''',
+###                                 { "%TRUTH_MUON_FS%": truthMuonFS, \
+###                                   "%TRUTH_MUONS%": truthMuons, \
+###                                   "%OBJECT%", object
+###                                 })
+###     #FIXME: postpone the projection until the object is used, so we can includes the cuts
+###     #and avoid an intermediate object ?
+###     obj_def = multi_replace('''%OBJECT% = apply<ParticleFinder>(event, "%OBJECT%").particles()
+### ''', { "%OBJECT%": object});
+###     return ("Particles", object)
+### #enddef
+
+def getAtlasCaloFs():
+    global atlasCaloFs, proj_init
+    if not atlasCaloFs:
+        atlasCaloFS = unique_name("caloFS")
+        proj_init += multi_replace('''FinalState %CALO_FS%(Cuts::abseta < 4.8);
+''', { "%CALO_FS%": atlasCaloFS })
+    #endif
+    return atlasCaloFS
+        
+def getJetAk04Eta48Proj():
+    global jetAk04Eta48Proj, proj_init
+    if not jetAk04Eta48Proj:
+        caloFS = getAtlasCaloFs()
+        jetAk04Eta48Proj = unique_name("jetAk04Eta48Proj")
+        includes.append("Rivet/Projections/FastJets.hh")
+        proj_init += multi_replace('''FastJets %JET_PROJ%(%CALO_FS%, FastJets::ANTIKT, 0.4);
+declare(%JET_PROJ%, "%JET_PROJ%");
+''',  { "%CALO_FS%": caloFS, \
+        "%JET_PROJ%": jetAk04Eta48Proj})
+    #endif
+    return jetAk04Eta48Proj
+    
+    
+def gen_MetAtlas_00(object, cuts):
+    global proj_init, obj_def
+    truthMET   = unique_name("TruthMET")
+    caloFS = getAtlasCaloFs()
+    if cuts:
+        raise RuntimeError("Error file %s, line %d. reject/select directive cannot be applied on MET" %  (lhadafile.current_line, lhadafile.name))
+    #endif
+    insert_include("Rivet/Projections/SmearedMET.hh")
+    insert_include("Rivet/Projections/MissingMomentum.hh")
+    proj_init += multi_replace('''MissingMomentum %TRUTH_MET%(%CALO_FS%);
+declare(%TRUTH_MET%, "%TRUTH_MET%");
+declare(SmearedMET(%TRUTH_MET%, MET_SMEAR_ATLAS_RUN2), "%RECO_MET%");
+''',  { "%CALO_FS%": caloFS, \
+        "%TRUTH_MET%": truthMET, \
+        "%RECO_MET%": object})
+    obj_def += multi_replace('''%OBJECT% = - applyProjection<SmearedMET>(event, "%RECO_MET%").vectorMPT();
+''', { "%OBJECT%": object, \
+       "%RECO_MET%": object})
+    vector3ToFourMometum = True
+    return ("FourMomentum", object)
+#enddef    
+
+jetAk04Atlas_00_proj = None
+def getJetAk04Atlas_00_proj():
+    global jetAk04Atlas_00_proj, proj_init, obj_def
+    insert_include("Rivet/Projections/SmearedJets.hh")
+    if not jetAk04Atlas_00_proj:
+        jetAk04Atlas_00_proj = unique_name("recoJetAk04")
+        genJetProj = getJetAk04Eta48Proj()
+        proj_init += multi_replace('''declare(SmearedJets(%GEN_JET_PROJ%, JET_SMEAR_ATLAS_RUN2, JET_BTAG_ATLAS_RUN2_MV2C20), "%RECO_JET_PROJ%");
+''', { "%GEN_JET_PROJ%": genJetProj, \
+       "%RECO_JET_PROJ%": jetAk04Atlas_00_proj})
+    obj_def += multi_replace('''SmearedJets %RECO_JET_PROJ% = applyProjection<SmearedJets>(event, "%RECO_JET_PROJ%");
+''', {"%RECO_JET_PROJ%": jetAk04Atlas_00_proj})
+    #endif
+    return jetAk04Atlas_00_proj
+    
+def gen_JetAk04Atlas_00(object, cuts):
+    global obj_def
+    if cuts is None:
+        cuts = ""
+    recoJetProj = getJetAk04Atlas_00_proj()
+    obj_def += multi_replace('''%OBJECT% = %PROJ%.jetsByPt(%CUTS%);
+''', {"%OBJECT%": object, \
+      "%CUTS%": cuts, \
+      "%PROJ%": recoJetProj})
+    return ("Jets", object)
+    
+#Supported 'external' object and map with the function that generates the Rivet code
+external_objs= { \
+#         "Particle": gen_Particle, \
+#         "JetAk04-00": gen_JetAk04_00, \
+#         "JetAk05-00": gen_JetAk05_00, \
+#         "JetAk08-00": gen_JetAk08_00, \
+#         "Photon-Cms-00": gen_PhotonCms_00, \
+#         "Electron-Cms-00": gen_ElectronCms_00, \
+#         "Muon-Cms-00": gen_MuonCms_00, \
+#         "Met-Cms-00": gen_MetCms_00, \
+#         "Jet-CmsAk05-00": gen_JetCmsAk05_00, \
+#         "Photon-Atlas-00": gen_PhotonAtlas_00, \
+         "Electron-AtlasRun2-00": gen_ElectronAtlas_00, \
+         "Muon-AtlasRun2-00": gen_MuonAtlas_00, \
+         "Met-AtlasRun2-00": gen_MetAtlas_00, \
+         "JetAk04-AtlasRun2-00": gen_JetAk04Atlas_00, \
+#         "JetAk06-00": gen_JetAtlasAk06_00, \
+         #         "ST-Atlas-00": gen_STAtlas_00 \
+}
 
 def unique_name(name):
     """Generate a unique name to be used in the analysis code as variable name or projection tag. If the name has not been used yet (first call with this value) the name is return as is, otherwise a sequential number is appended to it"""
@@ -164,7 +366,7 @@ def unique_name(name):
         i = names[name] + 1
         names[name] = i
 
-        mess('%s already used and mapped to %s.\n List of names:' % (name, name+str(i)), names)
+#        mess('%s already used and mapped to %s.\n List of names:' % (name, name+str(i), ",".join(names)))
         
         return name + str(i)
     except KeyError:
@@ -172,15 +374,40 @@ def unique_name(name):
         return name
 #enddef
 
+def check_code(filename):
+    '''Check validity of a source file by trying to compile it with g++'''
+    #Check first availability of the compiler:
+    cmd = [compile_cmd[0], "--version"]
+    try:
+        rc = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except OSError:
+        rc = 1
+    if rc != 0:
+        raise RuntimeError("Compiler %s is required, while it was not found. Please check it is available in the default search paths defined by PATH environment variable." \
+                           % cmd)
+        
+    cmd = compile_cmd
+    cmd.extend(["-I", os.path.dirname(lhadafile.name)])
+    cmd.append(filename)
+    rc = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if rc != 0:
+        raise RuntimeError("C++ code in file %s is not valid. Please to check it can be compiled with the following command:\n %s" \
+                           % (filename, " ".join(cmd)))
+    #endif
+#enddef
+
 def trans_func(code):
     '''Make the modifications of function c++ code read from LHADA input file required before inserting it in the Rivet analysis code'''
     #TODO: Check LHADPArticle -> Particle method mapping
-    r = re.compile(r'\b(std::)vector\s*<\s*LHADAParticle\s*>')
-    code = r.sub('Particles', code)
-    print '///<', code
-    r = re.compile(r'\bLHADAParticle\b')
-    code = r.sub('Particle', code)
-    print '///>', code
+    for (lhada_t, rivet_t) in (("LhadaParticle", "Particle"), ("LhadaJet", "Jet")):
+        print '>>>> ', lhada_t, '->', rivet_t
+        r = re.compile(r'\b(std::)vector\s*<\s*%s\s*>' % lhada_t)
+        print '>>1', code
+        code = r.sub('%ss' % rivet_t, code)
+        print '>>2', code
+        r = re.compile(r'\b%s\b' % lhada_t)
+        code = r.sub(rivet_t, code)
+        print '>>3', code
     return code
 
 def get_func_code(file, func_name):
@@ -199,6 +426,9 @@ def get_func_code(file, func_name):
     template_line = ""
     r = None
     bra = 0
+    if file not in code_files:
+        check_code(file)
+        code_files.append(file)
     for l in open(file):
         il += 1
         if comment_line.match(l):
@@ -206,10 +436,7 @@ def get_func_code(file, func_name):
         m = re_include.match(l)
         if m:
             file_to_include = m.groups()[0]
-            if file_to_include not in includes:
-                print "Adding c/c++ header file found in the file %s to  the list #include commands to put in the generated code." % file
-                includes.append(file_to_include)
-            #endif
+            insert_include(file_to_include)
             continue
         #endif m
         for t in re_split.split(l):
@@ -219,14 +446,14 @@ def get_func_code(file, func_name):
             ##    sys.stdout.write(".")
             t_stripped = t.strip()
             if re_c_comment_start.match(t) and state != "comment":
-                prev_state = state
+                stored_state = state
                 state = "comment"
                 continue
             if re_c_comment_stop.match(t) and state == "comment":
-                state = prev_state
+                state = stored_state
                 continue
             if state in ["init", "return_type" ] and t_stripped == "template":
-                prev_state = state
+                stored_state = state
                 state = "template"
                 template_line = t
                 continue
@@ -244,7 +471,7 @@ def get_func_code(file, func_name):
                 template_line += t
                 if t_stripped == ">":
                     template_line += "\n"
-                    state = prev_state
+                    state = stored_state
                 continue
             if len(t_stripped) > 0 and state == "init":
                 return_type = t
@@ -258,7 +485,7 @@ def get_func_code(file, func_name):
                     bra += 1
                     return_type += t
                     continue
-                if t_stripped == "<" and bra > 0:
+                if t_stripped == ">" and bra > 0:
                     bra -= 1
                     return_type += t
                     continue
@@ -268,14 +495,15 @@ def get_func_code(file, func_name):
                 if len(t_stripped) == 0:
                     return_type += t
                     continue
-                state = "function_name"
-                if t_stripped == func_name:
+                state = "look_for_("
+                this_func = t_stripped
+                if this_func == func_name:
                     mess("Found the function %s we were looking for at line %d of file %s." % (func_name, il, file))
                     if func_found: #function was already found. multiple definition
                         raise RuntimeError("Found multiple definitions of function %s in the file %s. This is not supported (including overloaded function." % (func_name, file))
                     func_found = True
                 continue
-            if state == "function_name":
+            if state == "look_for_(":
                 if t_stripped == "(":
                     state = "args"
                     continue
@@ -284,22 +512,22 @@ def get_func_code(file, func_name):
                 continue
             if state == "args":
                 if t_stripped == ")":
-                    prev_state = "function_body"
-                    state = "{"
+                    stored_state = "function_body"
+                    state = "look_for_{"
                     continue
                 arg_list += t
                 continue
             if state == "comma":
                 if t != ",":
                     raise RuntimeError("Syntax error in file %s, line %d. A comma is missing." % (file, il))
-                state = prev_state
+                state = stored_state
                 continue
-            if state == "{":
+            if state == "look_for_{":
                 if len(t_stripped) == 0:
                     continue
                 if t_stripped != "{":
                     raise RuntimeError("Syntax error in file %s, line %d. An opening curly bracket is missing."% (file, il))
-                state = prev_state
+                state = stored_state
                 nopened_curly_brackets = 1
                 continue
             if state == "function_body":
@@ -347,7 +575,7 @@ def report_syntax_error(line_num, filename, line, message = ""):
     raise RuntimeError(mess)
 
 def compose_rivet_cuts(cuts):
-    '''Generate code to perform an object cut using a combination of standard Rivet cuts. Returns None in the case the expression is too complex to express it that way.'''
+    '''Generate code to perform an object cut using a combination of standard Rivet cuts. Returns None in the case the expression is too complex.'''
     #TODO add support to parentheses.
     cut = r"\s*\(?(pt|E|m|rapidity|\|\s*rapidity\s*\|charge|\|\s*charge\s*\|pid|\|\s*pid\s*\|phi)\s*(<|>|<=|>=|!=|==)\s*((0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?\)?"
     r = re.compile(r"^%s\s*((&&|\|\||and|or)\s*%s)*$" % (cut, cut))
@@ -360,12 +588,10 @@ def compose_rivet_cuts(cuts):
         op = " && "
     #next c
 
-    print '>>> combined cut: ', combined_cut
-    
     if not r.match(combined_cut):
         return None
     
-    includes.append('Rivet/Tools/Cuts.hh')
+    insert_include('Rivet/Tools/Cuts.hh')
     re.sub(r"\bpt\b", "Cuts::pT", combined_cut)
     re.sub(r"\bE\b", "Cuts::E", combined_cut)
     re.sub(r"\bm\b", "Cuts::mass", combined_cut)
@@ -379,9 +605,8 @@ def compose_rivet_cuts(cuts):
     re.sub(r"\band\b", "&&", combined_cut)
     re.sub(r"\bor\b", "||", combined_cut)
 
-    print '>>>> combined_cut:', combined_cut
-    
     return combined_cut
+
 
 def gen_antikt(input_obj, dR, ptmin, etamax, cuts, output_obj):
     global proj_init, obj_def, particles, lhadafile
@@ -390,7 +615,7 @@ def gen_antikt(input_obj, dR, ptmin, etamax, cuts, output_obj):
     if input_obj != particles:
         raise RuntimeError("Error in line %d of file %s: antikt function is supported only for object with 'take external' or 'take particles'.\n" % (lhadafile.current_line, lhadafile.name))
     
-    includes.append("Rivet/Projections/FastJets.hh")
+    insert_include("Rivet/Projections/FastJets.hh")
     name = output_obj
     projname = unique_name(output_obj + "Proj")
     proj_init += 'addProjection(FastJets(fs, FastJets::ANTIKT, %g), "%s");\n' % (dR, name)
@@ -420,7 +645,7 @@ def gen_met(input_obj, cuts, output_obj):
     if input_obj != particles:
         raise RuntimeError("Error in line %d of file %s: antikt function is supported only for object with 'take external' or 'take particles'.\n" % (lhadafile.current_line, lhadafile.name))
 
-    includes.append("Rivet/Projections/MissingMomentum.hh")
+    insert_include("Rivet/Projections/MissingMomentum.hh")
     name = output_obj
     projname = unique_name(output_obj + "Proj")
     proj_init += 'addProjection(MissingMomentum(fs), "%s");\n' % name
@@ -483,16 +708,18 @@ def parse(infile):
             continue
         #endif
         toks = l.split()
-        if toks[0] == 'object':
-            parse_object()
+        if toks[0] in object_aliases:
+            parse_object_block()
         elif toks[0] == 'cut':
-            parse_cut()
+            parse_cut_block()
         elif toks[0] == 'region':
-            parse_region()
+            parse_region_block()
         elif toks[0] == 'function':
-            parse_function()
+            parse_function_block()
         elif toks[0] == 'table':
-            parse_table()
+            parse_table_block()
+        elif toks[0] == 'info':
+            parse_info_block()
         else:
             report_syntax_error(lhadafile.current_line, lhadafile.name, l, "Unknown keyword '%s'" % toks[0])
         #endif
@@ -509,7 +736,9 @@ def preprocess_line(l):
 
 def multi_replace(s, replace_map):
     for key, value in replace_map.items():
-        mess(key + "->" + value)
+        mess(key + "->" + str(value))
+        if value is None:
+            sys.stderr.write("Missing value for the key '%s'.\n" % key)
         s = s.replace(key, value)
     #next key. value
     return s
@@ -605,7 +834,10 @@ def gen_apply(func_name, input_obj, args, cuts, output_obj):
         
     if not output_obj:
         output_obj = unique_name(func_name)
-    
+    else:
+        output_obj = unique_name(output_obj)
+
+        
     #FIXME: support for multiple apply lines in same objet block: need to create intermediate objects
     if func_name == "antikt":
         args = check_args(args, {"input_object": [None, None], "dR": [float, 0.4], "ptmin": [float, 0], "etamax": [float, None]})
@@ -633,23 +865,49 @@ def gen_apply(func_name, input_obj, args, cuts, output_obj):
             obj_def += gen_collection_filter_code(get_obj_type(input_obj), input_obj, cuts, tmp_obj) + "\n\n"
             input_obj = tmp_obj
         
-        obj_def   += multi_replace('''%OUTPUT_OBJ% = %FUNC_NAME%(%ARGS%);''',
+        obj_def   += multi_replace('''%OUTPUT_OBJ% = %FUNC_NAME%(%ARGS%);\n\n''',
                                    {'%OUTPUT_OBJ%': output_obj,
-                                    '%INPUT_OBJ%': input_obj,
                                     '%ARGS%': gen_arg_list(func_name, args),
                                     '%FUNC_NAME%': func_name});
         return (func_return_types[func_name], output_obj);
     
 def gen_no_apply_object(input_obj, cuts, output_obj):
     """Generare code for an object block that does not have an apply statement"""
+    output_obj = unique_name(output_obj)
     global obj_def
     if len(cuts) == 0:
-        obj_def = '''%s %s = %s;\n''' % (get_obj_type(input_obj), ouput_obj, input_obj)
+        obj_def = '''%s %s = %s;\n''' % (get_obj_type(input_obj), output_obj, input_obj)
     else:
         obj_def += gen_collection_filter_code(get_obj_type(input_obj), input_obj, cuts, output_obj)
     #endif
     return (get_obj_type(input_obj), output_obj)
-        
+
+def gen_external(external_object_name, internal_object_name, cuts):
+    global lhadafile, external_objs, obj_def
+    rivet_cut = None
+    if len(cuts) > 0:
+        rivet_cut = compose_rivet_cuts(cuts)
+        if rivet_cut:
+            obj_name = unique_name(internal_object_name)
+        else:
+            #cuts could not be expressed as a rivet cut object
+            #and will be applied as a second step
+            obj_name = unique_name("pre%s" % internal_object_name.capitalize())    
+    try:
+        gen_func = external_objs[external_object_name]
+    except KeyError:
+        raise RuntimeError("Error. File %s, line %d. External object '%s' is not supported" % (lhadafile.name, lhadafile.current_line, external_object_name))
+    #FIXME: treatement of cuts...
+    (obj_type, obj_name) =  gen_func(internal_object_name, rivet_cut)
+    
+    if len(cuts) > 0 and not rivet_cut:
+        #cuts could not be expressed as a rivet cut object
+        pre_obj = obj_name
+        obj_name = unique_name(internal_object_name)
+        obj_def += gen_collection_filter_code(obj_type, pre_obj, cuts, obj_name)
+    #endif
+    return (obj_type, obj_name)
+
 #### def gen_cut_obj(cutname, cuts):
 ####     """Generate code that defined a Cut class to be used in an object collection definitions."""
 ####     expr = ""
@@ -680,7 +938,7 @@ def gen_no_apply_object(input_obj, cuts, output_obj):
 ####         if len(cuts) == 0:
 ####             cut_expr = ""
 ####         else:
-####             includes.append('Rivet/Tools/Cuts.hh')
+####             insert_include('Rivet/Tools/Cuts.hh')
 ####             subst_map = {"%CUTNAME%": cutname, "%EXPR%": expr, "%_%": indent};
 ####             code = multi_replace(
 ####                 """class %CUTNAME%: public CutBase {
@@ -712,15 +970,20 @@ def gen_collection_filter_code(coltype, incol, cuts, outcol):
     op = ""
     simple_cut = re.compile(r"\s*\(?(pt|E|m|rapidity|\|\s*rapidity\s*\|charge|\|\s*charge\s*\|pid|\|\s*pid\s*\|phi)\s*(<|>|<=|>=|!=|==)\s*((0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?\)?")
     for c in cuts:
-        subst_map = {
-            r"|[\s]*eta[\s]*|": "p.abseta()",
-            r"|[\s]*rapidity[\s]*|": "p.absrapidity()",
-            "eta": "p.eta()",
-            "pt" : "p.pt()",
-            "rapidity": "p.rapidity()",
-            "charge": "p.charge()"
-        };
-        subst_expr = multi_replace(c, subst_map)
+#        subst_map = {
+#            r"\|[\s]*eta[\s]*\|": "p.abseta()",
+#            r"\|[\s]*rapidity[\s]*\|": "p.absrapidity()",
+#            "eta": "p.eta()",
+#            "pt" : "p.pt()",
+#            "rapidity": "p.rapidity()",
+#            "charge": "p.charge()"
+#        };
+#        for k,v in subst_map:
+#            subst_expr = re.subn(v, k)
+#        subst_expr = multi_replace(c, subst_map)
+        subst_expr = parse_cut_line(c, "p.")
+        if incol == "jets":
+            print ">>>1", c, "->", subst_expr
         if not simple_cut.match(c):
             subst_expr = "(" + subst_expr + ")"
         expr += op + subst_expr
@@ -745,8 +1008,44 @@ def get_obj_type(cpp_obj_name):
         return types[cpp_obj_name]
     except KeyError:
         raise RuntimeError("Bug found in lhad2rivet while parsing line %d of file %s. Attempt to use object %s before its type was defined." % (lhadafile.current_line, lhadafile.name, cpp_obj_name))
-                        
-def parse_object():
+
+def parse_info_block():
+    global lhadafile, ana_info
+    #FIXME: support for 'info anlysis' split on several lines ?
+    line1 = preprocess_line(lhadafile.current_line_contents)
+    if not re.match(r'info\s+analysis', line1):
+        sys.stderr.write("Warning. Block starting at line %d of file %s will be ignored. Only analysis type of info block are supported.\n" % (lhadafile.current_line, lhadafile.name))
+        return
+    p = re.compile(r'(\w+)\s+(.*)')
+    l = ""
+    while True:
+        ll = lhadafile.readline()
+        #skip comment lines:
+        if re.match(r'^\s*#', ll):
+            continue
+
+        l += ll
+        
+        indented = re_indented.match(l) #must be checked before preprocess_line
+        l = preprocess_line(l)
+
+        if (not indented) or len(l) == 0:
+            mess("End of block info analysis at line %d." % (lhadafile.current_line))            
+            break
+        
+        if l[-1] == '\\':
+            continue;
+        
+        m = p.match(l)
+        if m:
+            (key, value) = m.groups()
+            if key in ana_info.keys():
+                syst.stderr.write("Warning, line %d of file %s will be ignored. Previously defined analysis information %s is overwritten here.\n" % (lhadafile.current_line, lhadafile.name, key))
+            ana_info[key] = value
+        l = ""
+    #end while
+    
+def parse_object_block():
     global weight_funcs, objects, types, lhadafile
     line1 = lhadafile.current_line_contents
     mess("Parsing block %s..." % line1)
@@ -759,26 +1058,25 @@ def parse_object():
     if object_name in objects:
         raise RuntimeError("Duplicate definition of object %s found line %d of file %s.\t%s\n" % (lhadafile.current_line, lhadafile.name, line1))
     if object_name in functions:
-        raise RuntimeError("Name %s was already used for a function and cannot be used in line %d of file %s to define an object.\t%s\n" % (object_name, lhadafile.current_line, lhadafile.name, line1))
-    objects[object_name] = unique_name(object_name)
+        raise RuntimeError("Name %s was already used to name a function and cannot be used in line %d of file %s to define an object.\t%s\n" % (object_name, lhadafile.current_line, lhadafile.name, line1))
     lhadafile.save_pos()
-    line_offset = -1
     apply_stmt = None
     cuts = []
     input_collection = ""
     last_obj = None
     last_non_empty_line = lhadafile.current_line
+    istatement = 0
     while True:
         lhadafile.save_pos()
         l = lhadafile.readline()
         indented = re_indented.match(l) #must be checked before preprocess_line        
         if len(l) == 0:
             break
-        line_offset += 1
         l = preprocess_line(l)
         if len(l) == 0:
             continue
         #endif
+        istatement += 1
         toks = l.split()
         if not indented:
             mess("End of block object %s at line %d." % (object_name, last_non_empty_line))
@@ -786,83 +1084,105 @@ def parse_object():
             break
         #endif
         last_non_empty_line = lhadafile.current_line
-        if line_offset == 0: #first statement of object block. It is required to be a 'take' statement.
-            if toks[0] != 'take':
-                raise RuntimeError("Syntax error in line %d of file %s: the first statement of a object block must be a take statement specifying the input collection.\n\t" % (lhadafile.current_line, lhadafile.name))
-            #endif
-            if len(toks) != 2:
-                raise RuntimeError("Syntax error in line %d of file %s: the first statement of a object block must be a take statement specifying the input collection.\n\t" % (lhadafile.current_line, lhadafile.name))
-            #endif
-            input_collection = toks[1]
-            if input_collection not in objects:
-                raise RuntimeError("Warning, line %d of file %s: object block %s takes as input an object collection which was not previously defined. \n\n" % (lhadafile.current_line, lhadafile.name, object_name))
-            last_obj = objects[input_collection]
-        else:
-            if toks[0] == 'select':
-                #pattern = re.compile(r'select\s+([^\s<>=.]+).([^\s<>=.]+)\s*([<>=]+=?)\s*([^\s<>=]+)')
-                #m = pattern.match(l)
-                #if not m:
-                #    raise RuntimeError("Syntax error in line %d of file %s: select statement should follow the format 'select variable operator value.\n\t" % (lhadfile.current_line, lhadafile.name,l))
-                ##endif
-                #(collection, observable, operator, value) = m.groups()
-                #gen_cut(collection, observable, operator, value)
-                pattern = re.compile(r'select\s+(.*)')
-                m = pattern.match(l)
-                if not m:
-                    raise RuntimeError("Syntax error in line %d of file %s: select statement should follow the format 'select variable operator value.\n\t" % (lhadfile.current_line, lhadafile.name,l))
+        if toks[0] == 'take':
+            if input_collection:
+                raise RuntimeError("Syntax error in line %d of file %s: multiple take line. An object block can contain only one take statement." % (lhadafile.current_line, lhadafile.name))
+            elif istatement != 1:
+                raise RuntimeError("Syntax error in line %d of file %s: the 'take' line must be the first non-comment statement of an object block." % (lhadafile.current_line, lhadafile.name))
+            elif len(toks) == 3 and toks[1] == "external":
+                last_obj = "external"
+                input_collection = toks[2]
+            elif len(toks) == 2:
+                input_collection = toks[1]
+                if input_collection == "external":
+                    raise RuntimeError("Error in line %d of file %s: lhada2rivet requires an object id from https://github.com/lhada-hep/lhada/blob/master/objects/object_list.md to be specified after the 'external' keyword.\n" % (lhadafile.current_line, lhadafile.name))
+                elif input_collection not in objects.keys():
+                    raise RuntimeError("Warning, line %d of file %s: object '%s' is not defined. Object definitions must precede their usage.\n\n" % (lhadafile.current_line, lhadafile.name, input_collection))
                 #endif
-                cuts.append(m.groups()[0])                
-                #endif
-            elif toks[0] == 'apply':
-                pattern = re.compile(r'apply\s+([^\s]+)\(([^)]*)\)')
-                m = pattern.match(l)
-                if not m:
-                    raise RuntimeError("Syntax error in line %d of file %s: apply statement should follow the format 'apply function(args...).\n\t%s" % (lhadfile.current_line, lhadafile.name, l))
-                (func_name, args) = m.groups()
-                #Insert the implicit argument:
-                #split args into [ "param1=value1", "param2=value2",...]:
+                last_obj = objects[input_collection]
+            else:
+                raise RuntimeError("Syntax error in line %d of file %s: a take statement must be followed by either exactly one argument or 'external' and one argument." % (lhadafile.current_line, lhadafile.name))
+            #endif input_collection                
+        elif toks[0] in ['select', 'reject']:
+            pattern = re.compile(r'(select|reject)\s+(.*)')
+            m = pattern.match(l)
+            if not m:
+                raise RuntimeError("Syntax error in line %d of file %s: select statement should follow the format 'select variable operator value." % (lhadafile.current_line, lhadafile.name))
+            #endif
+            if toks[0] == 'select': #inverted cut
+                #FIXME add code to simplify the expression ?
+                cuts.append("!(%s)" % m.groups()[1])
+            else:
+                cuts.append(m.groups()[1])
+            #endif            
+        elif toks[0] == 'apply':
+            pattern = re.compile(r'apply\s+([^\s]+)\(([^)]*)\)')
+            m = pattern.match(l)
+            if not m:
+                raise RuntimeError("Syntax error in line %d of file %s: apply statement should follow the format 'apply function(args...)." % (lhadafile.current_line, lhadafile.name))
+            (func_name, args) = m.groups()
+            #Insert the implicit argument:
+            #split args into [ "param1=value1", "param2=value2",...]:
+            if len(args) > 0:
                 args = "".join([ x for x in args if x not in [' ', '\t']]).split(",")
-                if len(args) == 1 and len(args[0]) == 0:
-                    args = []
+            else:
+                args = []
+
+            #check args
+            parg = re.compile(r'[^\s]+=[^\s]+')
+            for i, a in enumerate(args):
+                if not parg.match(a):
+                    raise RuntimeError("Syntax error in line %d of file %s, %s argument: function argument must follow the format <argument_name>=<value>.\n\n" % (lhadafile.current_line, lhadafile.name, tonth(i+1)))
+
+            if last_obj:
+                #FIXME: handle case of presence of last_obj not used in
+                #the function
                 args.insert(0, "input_object=%s" % last_obj)
-                #split args into { "param1": "value1", "param2": "value2", ...}
-                args = OrderedDict(map(lambda(x): x.split("="), args))
-                #endif
-                #if an apply statement is pending, its code must be generated:
-                if apply_stmt:
-                    (obj_type, last_obj) = gen_apply(apply_stmt[0], apply_stmt[1], apply_stmt[2], cuts, None)
-                    types[last_obj] = obj_type
-                    cuts = []
-                #if cuts are pending, corresponding code must be generated
-                if cuts:
-                    new_obj = unique_name("filtered_" + last_obj)
-                    (obj_type, last_obj) = gen_no_apply_object(last_obj, cuts, new_obj)
-                    cuts = []
-                    types[last_obj] = obj_type
-                #apply code is postponed to include possible cuts specified after
-                #the apply statement.
-                apply_stmt = (func_name, last_obj, args)
-            elif toks[0] == 'weight':
-                pattern = re.compile(r'weight\s+([^\s]+)')
-                m = pattern.match(l)
-                (func_name) = m.groups()
-                if not m:
-                    raise RuntimeError("Syntax error in line %d of file %s: weight statement should follow the format 'weight function.\n\t%s" % (lhadafile.current_line, lhadafile.name, l))
-                weight_funcs[object_name] = func_name
+            #split args into { "param1": "value1", "param2": "value2", ...}
+            args = OrderedDict(map(lambda(x): x.split("="), args))
             #endif
+            #if last object is external, code to produce it must be generated:
+            if last_obj == "external":
+                (obj_type, last_obj) = gen_external(input_collection, input_collection, cuts)
+                types[last_obj] = obj_type
+            #if an apply statement is pending, its code must be generated:
+            elif apply_stmt:
+                (obj_type, last_obj) = gen_apply(apply_stmt[0], apply_stmt[1], apply_stmt[2], cuts, None)
+                types[last_obj] = obj_type
+            #if cuts are pending, corresponding code must be generated
+            elif cuts:
+                new_obj = unique_name("filtered_" + last_obj)
+                (obj_type, last_obj) = gen_no_apply_object(last_obj, cuts, new_obj)
+                types[last_obj] = obj_type
+            #endif
+            cuts = [] #cuts processed by one of the three gen_xx commands
+            #apply code is postponed to include possible cuts specified after
+            #the apply statement.
+            apply_stmt = (func_name, last_obj, args)
+        elif toks[0] == 'weight':
+            pattern = re.compile(r'weight\s+([^\s]+)')
+            m = pattern.match(l)
+            (func_name) = m.groups()
+            if not m: 
+                raise RuntimeError("Syntax error in line %d of file %s: weight statement should follow the format 'weight function.\n\t%s" % (lhadafile.current_line, lhadafile.name))
+            weight_funcs[object_name] = func_name
+        else:
+            raise RuntimeError("Syntax error in line %d of file %s: '%s' is not a valid keyword to start a statement in an object block." % (lhadafile.current_line, lhadafile.name, toks[0]))
         #endif
     #endwhile
-    if apply_stmt:
-        (obj_type, last_obj) = gen_apply(apply_stmt[0], apply_stmt[1], apply_stmt[2], cuts, objects[object_name])
+    if last_obj == "external":
+        (obj_type, last_obj) = gen_external(input_collection, object_name, cuts)
+    elif apply_stmt:
+        (obj_type, last_obj) = gen_apply(apply_stmt[0], apply_stmt[1], apply_stmt[2], cuts, object_name)
     else:
-        (obj_type, last_obj) = gen_no_apply_object(last_obj, cuts, objects[object_name])
+        (obj_type, last_obj) = gen_no_apply_object(last_obj, cuts, object_name)
     #endif
+    objects[object_name] = last_obj
     types[last_obj] = obj_type
     cuts = []
-    return line_offset
-#enddefk
+#enddef
 
-def parse_function():
+def parse_function_block():
     """Parsing a function block. Information from the function block is not required by the translator, the block is skipped."""
     global functions, func_return_types, re_indented, lhadafile
     line1 = lhadafile.current_line_contents
@@ -872,7 +1192,7 @@ def parse_function():
         raise RuntimeError("Syntax error in line %d of file %s: the function is missing a name.\n\t" % (lhadafile.current_line, lhadafile.name, l))
     #endif
     func_name = toks[1]
-    mess("Parsing function block, %s..." % line1)
+    mess("Parsing function block, %s..." % line1.strip())
     functions.append(func_name)
     code_line = re.compile(r'^code\s+(.*)')
     code_line_found = False
@@ -893,6 +1213,9 @@ def parse_function():
             code_line_found = True
             #TODO: support for htpp://....
             cpp_fname = m.groups()[0]
+            #in case of relative path, the path is assumed to be relative to the input lhada file location:
+            if not os.path.isabs(cpp_fname):
+                cpp_fname = os.path.normpath(os.path.join(os.path.dirname(lhadafile.name), cpp_fname))
             #TODO: emit a warning if the function is not used..
             r = get_func_code(cpp_fname, func_name)
             if not r:
@@ -917,18 +1240,19 @@ def parse_function():
          raise RuntimeError("Function block defined at line %d of file %s is missing the 'code' statement" % (block_first_line, lhadafile.name))
 #enddef parse_function
 
-def parse_table():
+def parse_table_block():
     """Parsing a table black and generate corresponding code"""
     global tables, lhadafile
     mess("Parsing table block...")
     line1 = lhadafile.current_line_contents
+    toks = line1.strip().split()
     if len(toks) < 2:
         raise RuntimeError("Syntax error in line %d of file %s: the object is missing a name.\n\t" % (lhadafile.current_line, lhadafile.name, l))
     #endif
     table_name = toks[1]
     mess("Table name: " + table_name)
     if table_name in tables:
-        raise RuntimeError("Duplicate definition of table %s found line %d of file %s.\t%s\n" % (lhadfile.current_line, lhadafile.name, line1))
+        raise RuntimeError("Duplicate definition of table %s found line %d of file %s.\t%s\n" % (lhadafile.current_line, lhadafile.name, line1))
     tables[table_name] = None
 #    while True:
     line_offset = -1
@@ -949,24 +1273,24 @@ def parse_table():
         toks = l.split()
         if table_type is None:
             if toks[0] != "type":
-                raise RuntimeError("Syntax error in line %d of file %s. The first statement of a table body should start with thre keyword 'type'.\n\t%s" % (lhadfile.current_line, lhadafile.name, l))
+                raise RuntimeError("Syntax error in line %d of file %s. The first statement of a table body should start with thre keyword 'type'.\n\t%s" % (lhadafile.current_line, lhadafile.name, l))
             else:
                 table_type = toks[1]
                 if table_type not in table_types:
-                    raise RuntimeError("Syntax error in line %d of file %s. The name '%d' is not a valid type for a table. Supported types are %s.\n\t%s" % (lhadfile.current_line, lhadafile.name, ", ".join(table_types), l))
+                    raise RuntimeError("Syntax error in line %d of file %s. The name '%d' is not a valid type for a table. Supported types are %s.\n\t%s" % (lhadafile.current_line, lhadafile.name, ", ".join(table_types), l))
                 #endif
             #endif
         elif columns is None:
             if toks[0] != "columns":
-                raise RuntimeError("Syntax error in line %d of file %s. The second statement of a table body should start with the keyword 'columns'.\n\t%s" % (lhadfile.current_line, lhadafile.name, l))
+                raise RuntimeError("Syntax error in line %d of file %s. The second statement of a table body should start with the keyword 'columns'.\n\t%s" % (lhadafile.current_line, lhadafile.name, l))
             else:
                 columns = toks[1:]
             #endif
         else:
             if toks[0] != "entry":
-                raise RuntimeError("Syntax error in line %d of file %s. The third and following statements of a table body should start with the keyword 'entry'.\n\t%s" % (lhadfile.current_line, lhadafile.name, l))
-            elif toks[1:].size() != columns.size():
-                raise RuntimeError("Syntax error in line %d of file %s. Expecting %d values in the entry statement, while %d values were found.\n\t%s" % (lhadfile.current_line, lhadafile.name, columns.size(), toks[:1].size(), l))
+                raise RuntimeError("Syntax error in line %d of file %s. The third and following statements of a table body should start with the keyword 'entry'.\n\t%s" % (lhadafile.current_line, lhadafile.name, l))
+            elif len(toks[1:]) != len(columns):
+                raise RuntimeError("Syntax error in line %d of file %s. Expecting %d values in the entry statement, while %d values were found.\n\t%s" % (lhadafile.current_line, lhadafile.name, len(columns), len(toks[:1]), l))
             else:
                 contents.append(toks[:1])
             #endif
@@ -974,7 +1298,7 @@ def parse_table():
     tables[table_name] = [type, columns, contents]
         
 
-def parse_cut():
+def parse_cut_block():
     """Parsing a cut block and generate corresponding code"""
     global cut_names, func_codes, lhadafile
     mess("Parsing cut block...")
@@ -1011,54 +1335,80 @@ def parse_cut():
             lhadafile.restore_pos()
             break
         toks = l.split()
-        if toks[0] != 'select':
-            raise RuntimeError("Syntax error in line %d of file %s. Every line of the body of a cut block should start with the keyword 'select'.\n\t%s" % (lhadfile.current_line, lhadafile.name, l))
+        if toks[0] == 'select':
+            func_code += "    r = r & (" + parse_cut_line(" ".join(toks[1:]), "") + ");\n"
+        elif toks[0] == 'reject':
+            func_code += "    r = r & !(" + parse_cut_line(" ".join(toks[1:]), "") + ");\n"
+        else:
+            raise RuntimeError("Syntax error in line %d of file %s. Every line of the body of a cut block should start with the keyword 'select'.\n\t%s" % (lhadafile.current_line, lhadafile.name, l))
         #endif
-        func_code += "    r &= " + parse_cut_line(" ".join(toks[1:])) + ";\n"
         #FIXME: handle duplicate names
     func_code += '''    return cutflow.fill(%s, r);
 }''' % cutid
     func_codes.append(func_code)
 
-def parse_cut_line(l):
+    
+def parse_cut_line(l, pref):
     ''' '''
-    l.strip()
+    l = l.strip()
     r = ""
     toks_ = re.split("([\W]+)", l)
     #fixing some splitting failures:
     toks = []
     for t in toks_:
-        tt = re.split("([\]\[()<>=])", t)
+        tt = re.split(r"(<=|>=|[\]\[()=<>])", t)
         toks.extend(tt)
     #next t
+    toks_ = toks
+    toks = []
+    state = "init"
+    for t in toks_:
+        if state == "init" and t.strip() == "|":
+            state = "first|"
+        elif state == "first|" and t.strip() == "|":
+            toks[-1] = "|" + toks[-1] + "|"
+            state = "init"
+        else:
+            toks.append(t)
+        #endif
+    #next t
+
     ops = [ "+", "-", "/", "*", "^", "**"]
     r = ""
+
     trans = {
-        "size": "size()",
-        "and": " && ",
-        "or": " || ",
-        "e": "E() ",
-        "pt": "pt() ",
-        "m": "mass() ",
-        "phi": "phi() ",
-        "px": "px() ",
-        "py": "py() ",
-        "pz": "pz() ",
-        "theta": "theta() ",
-        ".": ".",
-        "(": "(",
-        ")": ") ",
-        ">": "> ",
-        "<": " < ",
-        ">=": " >= ",
-        "<=": " >= ",
-        "=": " == ",
-        "==": " == ",
-        "+" : " + ",
-        "-": " - ",
-        "*": " * ",
-        ",": ", "
+        r"^\|\s*eta\s*\|$": "%sabseta()",
+        r"^eta$": "%seta() ",
+        r"^\|\s*rapidity[\s]*\|$": "%sabsrapidity()",
+        r"^rapidity$": "%srap() ",
+        r"^theta$": "%stheta() ",
+        r"^size$": "%ssize()",
+        r"^and$": " && ",
+        r"^or$": " || ",
+        r"^e$": "%sE() ",
+        r"^pt$": "%spt() ",
+        r"^m$": "%smass() ",
+        r"^phi$": "%sphi() ",
+        r"^px$": "%spx() ",
+        r"^py$": "%spy() ",
+        r"^pz$": "%spz() ",
+        r"^\.$": ".",
+        r"^\($": "(",
+        r"^\)$": ") ",
+        r"^>$": "> ",
+        r"^<$": " < ",
+        r"^>=$": " >= ",
+        r"^<=$": " >= ",
+        r"^=$": " == ",
+        r"^==$": " == ",
+        r"^\+" : " + ",
+        r"^-$": " - ",
+        r"^\*$": " * ",
+        r"^,$": ", "
     };
+
+    for (k,v) in trans.iteritems():
+        trans[k] = v.replace("%s", pref)
 
     for tok in toks:
         tok = tok.strip()
@@ -1066,7 +1416,7 @@ def parse_cut_line(l):
             continue
         done = False
         for k, v in trans.iteritems():
-            if tok == k:
+            if re.match(k, tok):
                 r += v
                 done = True
                 break
@@ -1087,7 +1437,7 @@ def parse_cut_line(l):
             if tok in functions:
                 r +=  tok
                 continue
-            raise RuntimeError("Entity '%s' referred line %d in file %s is not defined.\n\t%s\n" % (tok, lhadfile.current_line, lhadafile.name, l))
+            raise RuntimeError("Entity '%s' referred line %d in file %s is not defined.\n\t%s\n" % (tok, lhadafile.current_line, lhadafile.name, l))
         #endif
         if tok == '[':
             r += "["
@@ -1095,7 +1445,6 @@ def parse_cut_line(l):
         if tok == ']':
             r += " - 1]"
             continue
-            
         r += tok
         #TODO: handle function named arguments
     return r.rstrip()
@@ -1199,7 +1548,7 @@ def gen_cutid_decl_code():
         code_init += s + '"%s"' % c
         s = ", "
     #next c
-    code_decl += "} CutIds;"
+    code_decl += "} CutIds;\n"
     code_init += "}"
     return (code_decl, code_init)
         
@@ -1213,7 +1562,8 @@ def gen_code():
             continue
         if i[0] not in [ '"', '<' ]:
             i = '"' + i + '"'
-        include_block += '#include %s\n' % i
+        if i.strip('"') not in excluded_includes:
+            include_block += '#include %s\n' % i
     #next i
 
     #Generate histograming code:
@@ -1223,6 +1573,16 @@ def gen_code():
 
 
     (cutid_decl, cutid_init) = gen_cutid_decl_code()
+
+    #Inplement the vector3 -> FourMometum cast operator
+    #if it is used:
+    if vector3ToFourMometum:
+        cast_op = '''static FourMomentum operator(const Vector3& v){
+%sreturn FourMomentum(v.x(), v.y(), v.z(), v.mod());
+}
+''' % indent
+        func_codes.insert(0, cast_op)
+    #endif
     
     # we substitude the code block in two steps in
     # order to check if the instance 'particles' is used
@@ -1243,17 +1603,10 @@ def gen_code():
                  "%COUNTER_FILL%":""
     }
 
-    print '>>>0', analysis_code_template
-    
     code = block_replace(analysis_code_template, subst_map)
-
-    print '>>>1', code
-
     subst_map = { "%ANALYSIS_NAME%": analysis_name,
                   "%CUTFLOW_INIT%": cutid_init}
     code = multi_replace(code, subst_map)
-    print '>>>2', code
-    
     #check if particles objet is used
     re_particles = re.compile(r'\bparticle\b')
     re_particles_func = re.compile(r'\bparticle\s*\(')
