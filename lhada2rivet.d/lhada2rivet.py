@@ -8,6 +8,10 @@ import subprocess
 from collections import OrderedDict
 
 
+# TOTO:
+# Generate code to protect for out-of-range index in selection expressions
+# Improve cutflow
+
 indent = ' ' * 2
 
 block_start = re.compile(r'object|collection|variable|cut|region|function|table')
@@ -120,6 +124,32 @@ class FileReader:
         self.current_line += 1
         return self.current_line_contents
 
+class FuncDef:
+    def __init__(self, template_line = None, return_type = None, name = None, arg_list = None, body = None, source_file = None):
+        self.template_line = template_line
+        self.return_type = return_type
+        self.name = name
+        self.arg_list = arg_list  # (type, name)
+        self.body = body
+        self.source_file = source_file
+    #enddef __init__
+    
+    def rivet_code(self):
+        '''Generate c++ code to incluse in the Rivet analysis class'''
+        code_template = '''%TEMPLATE_LINE%
+%RETURN_TYPE% %FUNC_NAME%(%ARG_LIST%){
+%FUNC_BODY%
+}'''
+
+        subst_map = { "%TEMPLATE_LINE%": self.template_line,  \
+                      "%RETURN_TYPE%": self.return_type, \
+                      "%FUNC_NAME%": self.name, \
+                      "%ARG_LIST%": self.arg_list, \
+                      "%FUNC_BODY%": self.body}
+        
+        return block_replace(code_template, subst_map)
+    #endef rivet_code
+        
 
 include_block = ""
 includes = []
@@ -137,7 +167,7 @@ table_types = ["events", "limits", "cutflow", "corr", "bkg"]
 histo_booking = ""
 
 #command to compile provided c++ code
-compile_cmd = ["g++", "-c", "-I../code_lib/include" ]
+compile_cmd = ["g++", "-c", "-Wall", "-Werror", "-I../code_lib/include" ]
 
 #Meta information on the analysis read from "info analysis" Lhada block
 ana_info = {}
@@ -159,8 +189,16 @@ types = { particles: "Particles"}
 #list of defined cuts
 cuts = []
 
-#list of defined functions
-functions = []
+#list of functions defined in the lhada file
+#the list maps function names to its FuncDef object instance
+funcs_lhada = {}
+
+#list of all functions read from c++ files references in the function blocks
+#elements
+funcs_all = []
+
+#List of c++ files read to fill the funcs_all list
+cpp_files = []
 
 #return types of defined functions listed in functions
 #If the value (v) is a int then it refers to the type of
@@ -168,7 +206,7 @@ functions = []
 #returns an instance of the same type as this argument.
 #In case of a fixed return type the c type name is specified
 #as a string
-func_return_types = {}
+#func_return_types = {}
 
 jetAk04Eta48Proj = None
 atlasCaloFs = None
@@ -292,7 +330,7 @@ declare(%JET_PROJ%, "%JET_PROJ%");
     
     
 def gen_MetAtlas_00(object, cuts):
-    global proj_init, obj_def
+    global proj_init, obj_def, vector3ToFourMometum
     truthMET   = unique_name("TruthMET")
     caloFS = getAtlasCaloFs()
     if cuts:
@@ -306,7 +344,7 @@ declare(SmearedMET(%TRUTH_MET%, MET_SMEAR_ATLAS_RUN2), "%RECO_MET%");
 ''',  { "%CALO_FS%": caloFS, \
         "%TRUTH_MET%": truthMET, \
         "%RECO_MET%": object})
-    obj_def += multi_replace('''%OBJECT% = - applyProjection<SmearedMET>(event, "%RECO_MET%").vectorMPT();
+    obj_def += multi_replace('''%OBJECT% = - toFourMomentum(applyProjection<SmearedMET>(event, "%RECO_MET%").vectorMPT());
 ''', { "%OBJECT%": object, \
        "%RECO_MET%": object})
     vector3ToFourMometum = True
@@ -400,18 +438,43 @@ def trans_func(code):
     '''Make the modifications of function c++ code read from LHADA input file required before inserting it in the Rivet analysis code'''
     #TODO: Check LHADPArticle -> Particle method mapping
     for (lhada_t, rivet_t) in (("LhadaParticle", "Particle"), ("LhadaJet", "Jet")):
-        print '>>>> ', lhada_t, '->', rivet_t
         r = re.compile(r'\b(std::)vector\s*<\s*%s\s*>' % lhada_t)
-        print '>>1', code
         code = r.sub('%ss' % rivet_t, code)
-        print '>>2', code
         r = re.compile(r'\b%s\b' % lhada_t)
         code = r.sub(rivet_t, code)
-        print '>>3', code
     return code
 
+
+
 def get_func_code(file, func_name):
-    '''Search for a function with name <func_name> in the c/c++ file <file>. Returns a list with in order the possible template defintion line, the function return type, the function name (i. e. func_name), and the function body without its curly brackets.'''
+    '''Search for a function with name <func_name> in the c/c++ file <file>. Returns FuncDef object.'''
+    global funcs_all
+    read_cpp_file(file)
+    r = None
+    for f in funcs_all:
+        if f.name == func_name and f.source_file != file:
+            print '>>2', func_name, f.source_file, file
+        if f.name == func_name and f.source_file == file:
+            if r:
+                for f in funcs_all:
+                    print f.name, f.source_file
+                raise RuntimeError("Error. The function %s was declared multiple times in the file %s. A function defined in the lhada file should be uniquely defined in the provided source file and overloading (functions with same name and differenet argument list) is not possible." % (func_name, file))
+            r = f
+        #endif
+    #next f
+    return r
+#enddef
+
+#def get_func_code(file, func_name):
+#    '''Search for a function with name <func_name> in the c/c++ file <file>. Returns a list with in order the possible template defintion line, the function return type, the function name (i. e. func_name), and the function body without its curly brackets.'''
+def read_cpp_file(file):
+    '''Read a C++ code file to store the function definitions'''
+    global cpp_files, funcs_all
+    if file in cpp_files:
+        return
+    else:
+        cpp_files.append(file)
+    
     state = "init"
     comment_line = re.compile(r'^\s*//')
     il = 0
@@ -422,6 +485,7 @@ def get_func_code(file, func_name):
     re_c_comment_stop = re.compile(r'\*/$')
     func_found = False
     arg_list = ""
+    func_name = ""
     func_body = ""
     template_line = ""
     r = None
@@ -496,12 +560,12 @@ def get_func_code(file, func_name):
                     return_type += t
                     continue
                 state = "look_for_("
-                this_func = t_stripped
-                if this_func == func_name:
-                    mess("Found the function %s we were looking for at line %d of file %s." % (func_name, il, file))
-                    if func_found: #function was already found. multiple definition
-                        raise RuntimeError("Found multiple definitions of function %s in the file %s. This is not supported (including overloaded function." % (func_name, file))
-                    func_found = True
+                func_name = t_stripped
+#                if this_func == func_name:
+#                    mess("Found the function %s we were looking for at line %d of file %s." % (func_name, il, file))
+#                    if func_found: #function was already found. multiple definition
+#                        raise RuntimeError("Found multiple definitions of function %s in the file %s. This is not supported (including overloaded function." % (func_name, file))
+#                    func_found = True
                 continue
             if state == "look_for_(":
                 if t_stripped == "(":
@@ -538,10 +602,17 @@ def get_func_code(file, func_name):
                 if nopened_curly_brackets == 0:
                     #TODO: check for multideclaration of function?
                     #TODO: check for arguments and support overloaded functions ?
-                    if func_found:
-                        #store result
-                        r = (template_line, trans_func(return_type), func_name, trans_func(arg_list), trans_func(func_body))
-                        func_found = False
+                    f = FuncDef(template_line = template_line, \
+                                return_type = trans_func(return_type), \
+                                name = func_name, \
+                                arg_list = trans_func(arg_list), \
+                                body = trans_func(func_body), \
+                                source_file = file)
+                    funcs_all.append(f)
+                    #if func_found:
+                    #    #store result
+                    #    r = (template_line, trans_func(return_type), func_name, trans_func(arg_list), trans_func(func_body))
+                    #    func_found = False
                     (template_line, return_type, arg_list, func_body) = ("", "", "", "")
                     state = "init"
                     #endif func_found
@@ -551,7 +622,7 @@ def get_func_code(file, func_name):
             #endif state == "function_body"
         #next t(oken)
     #next l(ine)
-    return r
+#    return r
 #enddef
 
 
@@ -857,7 +928,7 @@ def gen_apply(func_name, input_obj, args, cuts, output_obj):
             raise RuntimeError("Error in line %d of file %s: cut statements cannot be applied on a MET object.\n\t%s\n" % (lhadafile.current_line, lhadafile.name, l))
         return gen_met(input_obj, cuts, output_obj)
     else:
-        if func_name not in functions:
+        if func_name not in funcs_lhada:
             raise RuntimeError("Error in line %d of file %s: the function %s was not declared. A 'function' block must declare it before its usage." %(lhadafile.current_line, lhadafile.name, func_name))
 
         if cuts:
@@ -869,7 +940,7 @@ def gen_apply(func_name, input_obj, args, cuts, output_obj):
                                    {'%OUTPUT_OBJ%': output_obj,
                                     '%ARGS%': gen_arg_list(func_name, args),
                                     '%FUNC_NAME%': func_name});
-        return (func_return_types[func_name], output_obj);
+        return (funcs_lhada[func_name].return_type, output_obj);
     
 def gen_no_apply_object(input_obj, cuts, output_obj):
     """Generare code for an object block that does not have an apply statement"""
@@ -982,8 +1053,6 @@ def gen_collection_filter_code(coltype, incol, cuts, outcol):
 #            subst_expr = re.subn(v, k)
 #        subst_expr = multi_replace(c, subst_map)
         subst_expr = parse_cut_line(c, "p.")
-        if incol == "jets":
-            print ">>>1", c, "->", subst_expr
         if not simple_cut.match(c):
             subst_expr = "(" + subst_expr + ")"
         expr += op + subst_expr
@@ -1057,7 +1126,7 @@ def parse_object_block():
     mess("Object name: " + object_name)
     if object_name in objects:
         raise RuntimeError("Duplicate definition of object %s found line %d of file %s.\t%s\n" % (lhadafile.current_line, lhadafile.name, line1))
-    if object_name in functions:
+    if object_name in funcs_lhada:
         raise RuntimeError("Name %s was already used to name a function and cannot be used in line %d of file %s to define an object.\t%s\n" % (object_name, lhadafile.current_line, lhadafile.name, line1))
     lhadafile.save_pos()
     apply_stmt = None
@@ -1184,7 +1253,7 @@ def parse_object_block():
 
 def parse_function_block():
     """Parsing a function block. Information from the function block is not required by the translator, the block is skipped."""
-    global functions, func_return_types, re_indented, lhadafile
+    global funcs_lhada, re_indented, lhadafile
     line1 = lhadafile.current_line_contents
     block_first_line = lhadafile.current_line
     toks = line1.split()
@@ -1193,7 +1262,7 @@ def parse_function_block():
     #endif
     func_name = toks[1]
     mess("Parsing function block, %s..." % line1.strip())
-    functions.append(func_name)
+#    funcs_lhada.append(func_name)
     code_line = re.compile(r'^code\s+(.*)')
     code_line_found = False
     while True:
@@ -1220,25 +1289,49 @@ def parse_function_block():
             r = get_func_code(cpp_fname, func_name)
             if not r:
                 raise RuntimeError("Function %s() defined line %d of LHADA file %s was not found in file %s" % (func_name, block_first_line, lhadafile.name, cpp_fname))
-            else:
-                (template_line, return_type, func_name, arg_list, func_body) = r
-            code_template = '''%TEMPLATE_LINE%
-%RETURN_TYPE% %FUNC_NAME%(%ARG_LIST%){
-  %FUNC_BODY%
-}'''
-            subst_map = { "%TEMPLATE_LINE%": template_line,
-                          "%RETURN_TYPE%": return_type,
-                          "%FUNC_NAME%": func_name,
-                          "%ARG_LIST%": arg_list,
-                          "%FUNC_BODY%": func_body}
-            code = block_replace(code_template, subst_map)
-            func_codes.append(code)
-            func_return_types[func_name] = r[1]
+            #endif
+            funcs_lhada[func_name] = r
+#                (template_line, return_type, func_name, arg_list, func_body) = r
+#            code_template = '''%TEMPLATE_LINE%
+#%RETURN_TYPE% %FUNC_NAME%(%ARG_LIST%){
+#  %FUNC_BODY%
+#}'''
+#            subst_map = { "%TEMPLATE_LINE%": template_line,
+#                          "%RETURN_TYPE%": return_type,
+#                          "%FUNC_NAME%": func_name,
+#                          "%ARG_LIST%": arg_list,
+#                          "%FUNC_BODY%": func_body}
+#            code = block_replace(code_template, subst_map)
+#            func_codes.append(code)
+#            func_return_types[func_name] = r[1]
     #TODO: retrieve function code and copy it into generated files....
     #endwhile
     if not code_line_found:
          raise RuntimeError("Function block defined at line %d of file %s is missing the 'code' statement" % (block_first_line, lhadafile.name))
 #enddef parse_function
+
+
+def gen_func_block():
+    '''Generate code of function defined in the auxilary c++ source files'''
+
+    #functions defined in Lhada files and therefore called in the code
+    #generated from the other lhada block are grouped at the end of
+    #the function definition block
+    
+    code = []
+    for f in funcs_all:
+        if f not in funcs_lhada.values():
+            code.append(f.rivet_code())
+        #endif
+    #next f
+
+    for fname, fdef in funcs_lhada.iteritems():
+        code.append(fdef.rivet_code())
+    #next f
+
+    return code
+#enddef gen_func_block
+
 
 def parse_table_block():
     """Parsing a table black and generate corresponding code"""
@@ -1336,9 +1429,9 @@ def parse_cut_block():
             break
         toks = l.split()
         if toks[0] == 'select':
-            func_code += "    r = r & (" + parse_cut_line(" ".join(toks[1:]), "") + ");\n"
+            func_code += "    r = r && (" + parse_cut_line(" ".join(toks[1:]), "") + ");\n"
         elif toks[0] == 'reject':
-            func_code += "    r = r & !(" + parse_cut_line(" ".join(toks[1:]), "") + ");\n"
+            func_code += "    r = r && !(" + parse_cut_line(" ".join(toks[1:]), "") + ");\n"
         else:
             raise RuntimeError("Syntax error in line %d of file %s. Every line of the body of a cut block should start with the keyword 'select'.\n\t%s" % (lhadafile.current_line, lhadafile.name, l))
         #endif
@@ -1434,7 +1527,7 @@ def parse_cut_line(l, pref):
                 r += "cut_%s()" % tok
                 continue
             #endif
-            if tok in functions:
+            if tok in funcs_lhada:
                 r +=  tok
                 continue
             raise RuntimeError("Entity '%s' referred line %d in file %s is not defined.\n\t%s\n" % (tok, lhadafile.current_line, lhadafile.name, l))
@@ -1554,7 +1647,7 @@ def gen_cutid_decl_code():
         
 
 def gen_code():
-    global analysis_code_template, includes, include_block, objects
+    global analysis_code_template, includes, include_block, objects, func_codes, vector3ToFourMometum
 
     #Generate #include list block:
     for i in includes:
@@ -1577,12 +1670,14 @@ def gen_code():
     #Inplement the vector3 -> FourMometum cast operator
     #if it is used:
     if vector3ToFourMometum:
-        cast_op = '''static FourMomentum operator(const Vector3& v){
+        cast_op = '''static FourMomentum toFourMomentum(const Vector3& v){
 %sreturn FourMomentum(v.x(), v.y(), v.z(), v.mod());
 }
 ''' % indent
         func_codes.insert(0, cast_op)
     #endif
+
+    func_codes.extend(gen_func_block())
     
     # we substitude the code block in two steps in
     # order to check if the instance 'particles' is used
