@@ -3,6 +3,9 @@ function scalar_pt_sum
        arg particles partciles or energy-momentum quadrivectors to sum over. Only the .pt method is used.
        code CMS-PAS-SUS-16-015-functions.cc
 
+function btag_eff
+       arg bjets
+       code CMS-PAS-SUS-16-015-functions.cc 
 
 object jets_eta47
        take external
@@ -15,7 +18,7 @@ object jets
 object bjets
        take external
        apply antikt_b(dR=0.4, ptmin=30, etamax=2.5)
-       apply btag_eff
+       apply btag_eff()
 
 object met
        take external
