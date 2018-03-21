@@ -14,6 +14,20 @@
 class FourMomentum {
 public:
   /**
+   * Copy constructor
+   */
+  FourMomentum(const FourMomentum&);
+
+  /**
+   * Constructor
+   * @param e energy
+   * @param px x-component of the mometum
+   * @param py y-component of the mometum
+   * @param pz z-component of the mometum
+   */
+  FourMomentum(double e, double px, double py, double pz);
+
+  /**
    * Mass
    * Lhada name: mass
    */

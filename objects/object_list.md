@@ -33,3 +33,5 @@ Objects reconstructed in Run 2 CMS data
 | MET         | Met-CmsRun2-00        | Missing energy reconstructed with the CMS detectorin Run 2 conditions. Delphes datacard [delphes_card_CMS.tcl] ( https://github.com/delphes/delphes/blob/764f536462b646fdd0f033cc71c2b1539df6296a/cards/delphes_card_CMS.tcl)|
 | Jet         | Jet-CmsRun2Ak04-00    | Jet reconstructed with the CMS detector and clustered with anti-kt algorithm with distance parameter R=0.4 in Run 2 conditions. Delphes datacard [delphes_card_CMS.tcl] ( https://github.com/delphes/delphes/blob/764f536462b646fdd0f033cc71c2b1539df6296a/cards/delphes_card_CMS.tcl)|
 | ST          | ST-AtlasRun2-00       | Transverse momentum scalar sum over all objects used in the reconstruction of ATLAS missing ET  |
+
+All collections listed in this page are ordered by decreasing pt

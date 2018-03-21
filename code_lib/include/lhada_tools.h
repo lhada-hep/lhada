@@ -8,6 +8,9 @@
 #ifndef Lhada_Tools_h
 #define Lhada_Tools_h
 
+#include "LhadaParticle.h"
+#include "LhadaJet.h"
+
 /**
  * Computes the azimuthal angle separation between two momenta mapped to
  * the [0, pi] range.
