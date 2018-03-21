@@ -51,14 +51,14 @@ cut met_soft
     met.pt > 200
 
 cut ak8_jet
-    ak8jets[1].pt > 250
+    ak8jets[0].pt > 250
     
 cut tau2tau1
-    tau2(ak8jets[1]) / tau1(ak8jets[1]) < 0.6
+    tau2(ak8jets[0]) / tau1(ak8jets[0]) < 0.6
 
 cut mpruned
-    ak8jets[1].m > 65
-    ak8jets[1].m < 105
+    ak8jets[0].m > 65
+    ak8jets[0].m < 105
 
 cut met_hard    
     met.pt > 250
@@ -94,5 +94,4 @@ table results_events
       columns name     obs bkg dbkg
       entry mono-v     139
       entry mono-jet   884
-      
       
