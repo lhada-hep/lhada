@@ -6,22 +6,21 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
-#include "LhadaParticle.h"
 #include "FourMomentum.h"
 #include "lhada_tools.h"
 
-double Meff(std::vector<LhadaParticle> jets, FourMomentum MET) {
+double calc_Meff(std::vector<LhadaJet> jets, FourMomentum MET) {
   double meff = MET.pt();
-  for (int i=0; i < jets.size(); i++) {
+  for (unsigned i=0; i < jets.size(); i++) {
     meff += jets[i].pt();
   }
   return meff;
 }
 
-double dphijNjle3METmin(const std::vector<LhadaParticle>& jets, const FourMomentum& MET) {
+double calc_dphijNjle3METmin(const std::vector<LhadaJet>& jets, const FourMomentum& MET) {
   if (jets.size() < 2)
     return 0;
-  int njets = 3;
+  unsigned njets = 3;
   if (jets.size() == 3) njets = 2;
   double dphimin = 999;
   for(unsigned ij = 0; ij > njets; ++ij){
@@ -31,7 +30,7 @@ double dphijNjle3METmin(const std::vector<LhadaParticle>& jets, const FourMoment
   return dphimin;
 }
 
-double dphijNjgt3METmin(const std::vector<LhadaParticle>& jets, const FourMomentum& MET) {
+double calc_dphijNjgt3METmin(const std::vector<LhadaJet>& jets, const FourMomentum& MET) {
   double dphimin = 999;
   if (jets.size() <= 3)
     return 0;
@@ -42,19 +41,18 @@ double dphijNjgt3METmin(const std::vector<LhadaParticle>& jets, const FourMoment
   return dphimin;
 }
 
-double METovermeffNJ(const std::vector<LhadaParticle>& jets, int njets, const FourMomentum& MET) {
+double calc_METoverMeffNJ(const std::vector<LhadaJet>& jets, unsigned njets, const FourMomentum& MET) {
   if (jets.size() < njets) {
-    std::cout << "Not enough jets" << std::endl;
     return 0;
   }
   double meff = MET.pt();
-  for (int i=0; i<njets; i++) {
+  for (unsigned i = 0; i < njets; i++) {
     meff += jets[i].pt();
   }
   return MET.pt() / meff;
 }
 
-double METoversqrtHT(const std::vector<LhadaParticle>& jets, const FourMomentum& MET) {
+double calc_METoversqrtHT(const std::vector<LhadaJet>& jets, const FourMomentum& MET) {
   double HT = 0;
   for (const auto& j: jets){
     HT += j.pt();
@@ -62,7 +60,7 @@ double METoversqrtHT(const std::vector<LhadaParticle>& jets, const FourMomentum&
   return MET.pt() / sqrt(HT);
 }
 
-double aplanarity(const std::vector<LhadaParticle>& jets) {
+double calc_aplanarity(const std::vector<LhadaJet>& jets) {
   //Code from https://inspirehep.net/record/1510490, B. Fuks et al.
   //Construction of the sphericity tensor, calculation of the aplanarity
   //using the Cardano algorithm
@@ -91,3 +89,79 @@ double aplanarity(const std::vector<LhadaParticle>& jets) {
   double lam3 = 1.5*std::min(std::min(a1,a2),a3);
   return lam3;
 }
+
+/**
+ * Filter an electron collection by requiring a mininum of a 0.05 distance
+ * in the \eta,\phi plane between the leptons. In case of multiple lepton
+ * within this distance the first in the collection (typically pt ordered)
+ * is kept and others are dropped.
+ * arg el collection to filter
+ */
+std::vector<LhadaParticle> unravelEl(const std::vector<LhadaParticle>& el){
+  const int n = el.size();
+  const double minDeltaR = 0.05;
+  std::vector<LhadaParticle> r;
+  r.reserve(n);
+  //Algorithm: we start from the last element of the collection (typ. the one with
+  //the lowest pt) and copy it into the new collection only if it is not closer
+  //than 0.05 of any element higher in the collection order (typ. with higher pt)
+  for(int i = n - 1; i >= 0; --i){
+    bool veto = false;
+    for(int j = i - 1; j >= 0; --j){
+      veto = veto || (deltaR(el[j], el[i]) < minDeltaR);
+    }
+    if(!veto){
+      r.push_back(el[i]);
+    }
+  }
+  return r;
+}
+
+/**
+ * Filters a particle collection by removing the element
+ * closer in the \eta,\phi plane to any particle of a second
+ * collection than a given deltaR minimum
+ * @arg to_filter collection to filter
+ * @arg col2 second collection
+ * @arg minDeltaR minium distance
+ */
+template<typename T, typename U>
+std::vector<T> dRVeto(const std::vector<T>& to_filter,
+		      const std::vector<U>& col2,
+		      double minDeltaR){
+  std::vector<T> r;
+  r.reserve(to_filter.size());
+  for(const auto& o1: to_filter){
+    bool veto = false;
+    for(const auto& o2: col2){
+      if(deltaR(o1, o2) < minDeltaR) veto = true;
+    }
+    if(!veto) r.push_back(o1);
+  }
+  return r;
+}
+
+
+//template
+//std::vector<LhadaParticle> dRVeto(const std::vector<LhadaParticle>& to_filter,
+//				  const std::vector<LhadaJet>& col2,
+//				  double minDeltaR);
+//
+//template
+//std::vector<LhadaJet> dRVeto(const std::vector<LhadaJet>& to_filter,
+//			     const std::vector<LhadaParticle>& col2,
+//			     double minDeltaR);
+
+
+std::vector<LhadaParticle> dRPartVeto(const std::vector<LhadaParticle>& to_filter,
+				      const std::vector<LhadaJet>& col2,
+				      double minDeltaR){
+  return dRVeto(to_filter, col2, minDeltaR);
+}
+
+std::vector<LhadaJet> dRJetVeto(const std::vector<LhadaJet>& to_filter,
+				const std::vector<LhadaParticle>& col2,
+				double minDeltaR){
+  return dRVeto(to_filter, col2, minDeltaR);
+}
+

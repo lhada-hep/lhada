@@ -3,7 +3,10 @@
 info analysis
 # Details about experiment
   experiment ATLAS
+  collider LHC
   id SUSY-2013-15
+  inspireID 1458270
+  title Search for squarks and gluinos in final states with jets and missing transverse momentum at $\sqrt{s} =13\,$TeV with the ATLAS detector
   publication Eur. Phys. J. C(2016) 76: 392
   sqrtS 13.0
   lumi 3.2
@@ -11,81 +14,104 @@ info analysis
   hepdata http://hepdata.cedar.ac.uk/view/ins1304456
   doi 10.1140/epjc/s10052-016-4184-8
 
-function Meff
+function calc_Meff
   arg jetsSR
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function dphijNjle3METmin
+function calc_dphijNjle3METmin
   arg jetsSR
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function dphijNjgt3METmin
+function calc_dphijNjgt3METmin
   arg jetsSR
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function METovermeffNJ
+function calc_METoverMeffNJ
   arg jetsSR
   arg njets
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function METoversqrtHT
+function calc_METoversqrtHT
   arg jetsSR
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function aplanarity
+function calc_aplanarity
   arg jetsSR
   code ATLASSUSY1605.03814_functions.h
 
+function unravelEl
+  # Filter an electron collection by requiring a mininum of a 0.05 distance
+  # in the \eta,\phi plane between the leptons. In case of multiple lepton
+  # within this distance the first in the collection (pt ordered) 
+  # is kept and others are dropped.
+  arg electrons #collection to filter
+  code ATLASSUSY1605.03814_functions.h
+
+function dRPartVeto
+  # Filter a particle collection by removing the element
+  # closer in the \eta,\phi plane to any jet of a second
+  # collection than a given deltaR minimum
+  arg to_filter # collection to filter
+  arg col2      # second collection
+  code ATLASSUSY1605.03814_functions.h
+
+function dRJetVeto
+  # Filter a jet collection by removing the element
+  # closer in the \eta,\phi plane to any particle of a second
+  # collection than a given deltaR minimum
+  arg to_filter # collection to filter
+  arg col2      # second collection
+  code ATLASSUSY1605.03814_functions.h
+
+
 # OBJECT SELECTIONS
 object jets 
-# Delphes jets
   take external JetAk04-AtlasRun2-00
   select pt > 20
-  select |Eta| < 2.8
+  select |eta| < 2.8
 
 object cleanjets
   take jets
-  reject dR(Eta, Phi, electrons.Eta, electrons.Phi) < 0.2
+  apply dRJetVeto(col2 = electrons, minDeltaR = 0.2)
 
-object bjets
-# b-tagging jets
-  take jets
-  select BTag = 1
-  select pt > 50
-  select |Eta| < 2.5
+#object bjets
+## b-tagging jets
+#  take jets
+#  select BTag = 1
+#  select pt > 50
+#  select |eta| < 2.5
 
 object muons
 # Muons
   take external Muon-AtlasRun2-00
   select pt > 10
-  select |Eta| < 2.7
-  select IsolationVarRhoCorr < 0.1
-  #select isol(src=tracks, dR=0.4, reliso=true)<0.1
+  select |eta| < 2.7
+  #select IsolationVarRhoCorr < 0.1
+  #select isol(src=tracks, dR=0.4, reliso=true) < 0.1
 
 object cleanmuons
   take muons
-  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRlj
-  reject dRlj < 0.4
+  apply dRPartVeto(col2 = cleanjets, minDeltaR = 0.4)
+  
 
 object electrons
 # loose electrons
   take external Electron-AtlasRun2-00
   select pt > 10
-  select |Eta| < 2.47
+  select |eta| < 2.47
 
 object cleanelectrons
   take electrons
-  reject dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) < 0.4
+  apply dRPartVeto(col2 = cleanjets, minDeltaR = 0.4)
 
 object verycleanelectrons
   take cleanelectrons
-  select dR(Eta, Phi, cleanelectrons.Eta, cleanelectrons.Phi) > 0.05
-  select pt > cleanelectrons.pt
+  apply unravelEl()
 
 object MET
   take external Met-AtlasRun2-00
@@ -97,40 +123,40 @@ object jetsSR
 # EVENT VARIABLES
 
 variable Meff
-  apply Meff(jetsSR = jetsSR, MET = MET)
+  apply calc_Meff(jetsSR = jetsSR, MET = MET)
 
-variable dphijNjle33METmin
-  apply dphijNjle3METmin(jetsSR = jetsSR, MET = MET)  
+variable dphijNjle3METmin
+  apply calc_dphijNjle3METmin(jetsSR = jetsSR, MET = MET)  
 
 variable dphijNjgt3METmin
-  apply dphijNjgt3METmin(jetsSR = jetsSR, MET = MET)  
+  apply calc_dphijNjgt3METmin(jetsSR = jetsSR, MET = MET)  
 
 variable METoversqrtHT
-  apply METoversqrtHT(jetsSR = jetsSR, MET = MET)
+  apply calc_METoversqrtHT(jetsSR = jetsSR, MET = MET)
 
-variable METovermeff2j
-  apply METovermeffNJ(jetsSR = jetsSR, njets = 2, MET = MET)
+variable METoverMeff2j
+  apply calc_METoverMeffNJ(jetsSR = jetsSR, njets = 2, MET = MET)
 
-variable METovermeff4j
-  apply METovermeffNJ(jetsSR = jetsSR, njets = 4, MET = MET)
+variable METoverMeff4j
+  apply calc_METoverMeffNJ(jetsSR = jetsSR, njets = 4, MET = MET)
 
-variable METovermeff5j
-  apply METovermeffNJ(jetsSR = jetsSR, njets = 5, MET = MET)
+variable METoverMeff5j
+  apply calc_METoverMeffNJ(jetsSR = jetsSR, njets = 5, MET = MET)
 
-variable METovermeff6j
-  apply METovermeffNJ(jetsSR = jetsSR, njets = 6, MET = MET)
+variable METoverMeff6j
+  apply calc_METoverMeffNJ(jetsSR = jetsSR, njets = 6, MET = MET)
 
 variable aplanarity
-  apply aplanarity(jetsSR = jetsSR)
+  apply calc_aplanarity(jetsSR = jetsSR)
 
 
 # EVENT SELECTION
 
 cut preselection
 # Pre-selection cuts
-  select MET.pt > 200  
-  reject cleanmuons.pt > 10 
-  reject verycleanelectrons.pt > 10
+  select MET.pt > 200
+  reject cleanmuons.size > 0
+  reject verycleanelectrons.size > 0
   select jetsSR.size > 0
 
 cut 2jl
@@ -140,7 +166,7 @@ cut 2jl
   select jetsSR[1].pt > 200
   select dphijNjle3METmin > 0.8
   select METoversqrtHT > 15
-  select Meff > 1200  
+  select Meff > 1200
 
 cut 2jm
   select preselection
@@ -149,7 +175,7 @@ cut 2jm
   select jetsSR[1].pt > 50
   select dphijNjle3METmin > 0.4
   select METoversqrtHT > 15
-  select Meff > 1600  
+  select Meff > 1600
 
 cut 2jt
   select preselection
@@ -228,5 +254,3 @@ table results_events
   entry   5j     7  13.2  2.2
   entry   6jm    4   6.9  1.5
   entry   6jt    3   4.2  1.2
-
-
