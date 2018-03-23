@@ -310,41 +310,6 @@ def gen_ElectronCms_00(object, cuts, localVar):
 def gen_MuonCms_00(object, cuts, localVar):
     return gen_RecoObj(object, "Muon", "2.7", "MUON_EFF_CMS_RUN2", "MUON_SMEAR_CMS_RUN2", cuts, localVar)
 
-
-### def gen_ElectronAtlas_00(object):
-###     truthElectrons = unique_name("TruthElectrons")
-###     truthElectronFS = unique_name("TruthElectronFS") 
-###     proj_init = multi_replace('''PromptFinalState es(Cuts::abseta < 2.5 && Cuts::abspid == PID::ELECTRON, true, true);
-### declare(%TRUTH_ELECTRON_FS%, "%TRUTH_ELECTRONS%");
-### declare(SmearedParticles(es, ELECTRON_EFF_ATLAS_RUN2, ELECTRON_SMEAR_ATLAS_RUN2), %OBJECT%)''',
-###                                 { "%TRUTH_ELECTRON_FS%": truthElectronFS, \
-###                                   "%TRUTH_ELECTRONS%": truthElectrons, \
-###                                   "%OBJECT%", object
-###                                 })
-###     #FIXME: postpone the projection until the object is used, so we can includes the cuts
-###     #and avoid an intermediate object ?
-###     obj_def = multi_replace('''%OBJECT% = apply<ParticleFinder>(event, "%OBJECT%").particles()
-### ''', { "%OBJECT%": object});
-###     return ("Particles", object)
-### #enddef
-### 
-### def gen_MuonAtlas_00(object, uid):
-###     truthMuons = unique_name("TruthMuons")
-###     truthMuonFS = unique_name("TruthMuonFS") 
-###     proj_init = multi_replace('''PromptFinalState es(Cuts::abseta < 2.5 && Cuts::abspid == PID::MUON, true, true);
-### declare(%TRUTH_MUON_FS%, "%TRUTH_MUONS%");
-### declare(SmearedParticles(es, MUON_EFF_ATLAS_RUN2, MUON_SMEAR_ATLAS_RUN2), %OBJECT%)''',
-###                                 { "%TRUTH_MUON_FS%": truthMuonFS, \
-###                                   "%TRUTH_MUONS%": truthMuons, \
-###                                   "%OBJECT%", object
-###                                 })
-###     #FIXME: postpone the projection until the object is used, so we can includes the cuts
-###     #and avoid an intermediate object ?
-###     obj_def = multi_replace('''%OBJECT% = apply<ParticleFinder>(event, "%OBJECT%").particles()
-### ''', { "%OBJECT%": object});
-###     return ("Particles", object)
-### #enddef
-
 def getAtlasCaloFs():
     global atlasCaloFs, proj_init
     if not atlasCaloFs:
@@ -555,10 +520,6 @@ def read_cpp_file(file):
             continue
         #endif m
         for t in re_split.split(l):
-##            if len(t.strip()) > 0:
-            ##                sys.stdout.write("\nState: %s; Next token: %s" % (state, t))
-            ##else:
-            ##    sys.stdout.write(".")
             t_stripped = t.strip()
             if re_c_comment_start.match(t) and state != "comment":
                 stored_state = state
@@ -1033,61 +994,6 @@ def gen_external(external_object_name, internal_object_name, cuts):
     #endif
     return (obj_type, obj_name)
 
-#### def gen_cut_obj(cutname, cuts):
-####     """Generate code that defined a Cut class to be used in an object collection definitions."""
-####     expr = ""
-####     op = ""
-####     op2 = ""
-####     combined_cut = ""
-####     simple_cut = re.compile(r"\s*\(?(pt|E|m|rapidity|\|\s*rapidity\s*\|charge|\|\s*charge\s*\|pid|\|\s*pid\s*\|phi)\s*(<|>|<=|>=|!=|==)\s*((0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?\)?")
-####     for c in cuts:
-####         subst_map = {
-####             r"|[\s]*eta[\s]*|": "p.abseta()",
-####             r"|[\s]*rapidity[\s]*|": "p.absrapidity()",
-####             "eta": "p.eta()",
-####             "pt" : "p.pt()",
-####             "rapidity": "p.rapidity()",
-####             "charge": "p.charge()"
-####             };
-####         subst_expr = "(" + multi_replace(c, subst_map) + ")"
-####         decorted_c = c
-####         if not simple_cut.match(c):
-####             subst_expr = "(" + subst_expr + ")"
-####             decorated_c = "(" + c + ")"
-####         expr += op + subst_expr
-####         combined_cut = op2 + decorated_c
-####         op = "\n" + " "*4 + "&& ";
-####         op2 = " && ";
-####     cut_expr = compose_rivet_cuts(cutname, combined_cut)
-####     if not cut_expr:
-####         if len(cuts) == 0:
-####             cut_expr = ""
-####         else:
-####             insert_include('Rivet/Tools/Cuts.hh')
-####             subst_map = {"%CUTNAME%": cutname, "%EXPR%": expr, "%_%": indent};
-####             code = multi_replace(
-####                 """class %CUTNAME%: public CutBase {
-#### 
-#### public:
-#### 
-#### %_%bool operator==(const Cut& c) const {
-#### %_%%_%return false;
-#### %_%}
-#### 
-#### protected:
-#### 
-#### %_%template <typename ClassToCheck>
-#### %_%bool _accept(const ClassToCheck& p){
-#### %_%%_%return %EXPR%;
-#### %_%}
-#### 
-#### };
-#### """, subst_map)
-####             obj_cuts.append(code);
-####             cut_expr = cutname
-####         #endif
-####     #endif
-####     return cut_expr
 
 def gen_collection_filter_code(coltype, incol, cuts, outcol, localVar):
     '''Generate c++ code that filters the object collection <incol> by applying cuts listed in the parameter <cuts> to produce the new collection <outcol>. Returns the generated code.'''
@@ -1099,17 +1005,6 @@ def gen_collection_filter_code(coltype, incol, cuts, outcol, localVar):
     else:
         type_decl = ""
     for c in cuts:
-#        subst_map = {
-#            r"\|[\s]*eta[\s]*\|": "p.abseta()",
-#            r"\|[\s]*rapidity[\s]*\|": "p.absrapidity()",
-#            "eta": "p.eta()",
-#            "pt" : "p.pt()",
-#            "rapidity": "p.rapidity()",
-#            "charge": "p.charge()"
-#        };
-#        for k,v in subst_map:
-#            subst_expr = re.subn(v, k)
-#        subst_expr = multi_replace(c, subst_map)
         subst_expr = parse_cut_line(c, "p.")[0]
         if not simple_cut.match(c):
             subst_expr = "(" + subst_expr + ")"
