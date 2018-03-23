@@ -30,14 +30,15 @@ namespace Rivet {
   class %ANALYSIS_NAME%: public Analysis {
   public:
 
-    ///Cut ids
-    %CUT_IDS%
+    ///Cut flow ids
+    %DECL_CF_IDS%
 
     /// Constructor
     %ANALYSIS_NAME%():
-      Analysis("%ANALYSIS_NAME%"),
-      cutflow("CutFlow", %CUTFLOW_INIT%)
-    {  }
+      Analysis("%ANALYSIS_NAME%")
+    {  
+       %CFS_INIT%
+    }
 
 
     /// Book histograms and initialise projections before the run
@@ -77,7 +78,7 @@ namespace Rivet {
     void finalize() {
        std::cout << "Analsyis cut flow:\\n"
                  << "-----------------\\n\\n"
-                 << cutflow << "\\n";
+                 << cutflows << "\\n";
     }
 
 
@@ -95,8 +96,7 @@ namespace Rivet {
     %COUNTER_DECLARATION%
     //@}
 
-    ///Tracks the event counts after each cut
-    Cutflow cutflow;
+    %CFS_DECL%
 
   };
   DECLARE_RIVET_PLUGIN(%ANALYSIS_NAME%);
@@ -149,7 +149,32 @@ class FuncDef:
         
         return block_replace(code_template, subst_map)
     #endef rivet_code
-        
+#end class FuncDef
+
+class CutNode:
+    def __init__(self, name):
+        self.name = name
+        self._dependencies = [] #list of cut blocks this block depends on
+        self.endpoint = True    #True if no other cut block depends on this one
+        self.cuts = []          #List of selection conditions
+        self.cutflows = []      #list of cut flows (identified by their endpoint cut) this cut is in.
+        self.order = 0          #number of single cut preceeding the first cut of this cut block in any cut flow.
+    #enddef __init__
+    def add_dependency(self, c):
+        if len(self._dependencies) > 0:
+            raise Runtime("The cut block %s violates the rule requiring that a cut block depends on maximum another cut block." % name)
+        c.endpoint = False
+        self._dependencies.append(c)
+    #enddef add_dependency
+    def add_dependencies(self, cc):
+        for c in cc:
+            self.add_dependency(c)
+        #next c
+    #enddef add_dependencies
+    def dependencies(self):
+        return self._dependencies
+    #enddef dependencies
+#end class CutNode
 
 include_block = ""
 includes = []
@@ -176,7 +201,7 @@ ana_info = {}
 obj_cuts = []
 
 #list of cut ids used for to identify the cut in the cutflow
-cut_ids = []
+#cut_ids = []
 
 #list of objects defined in LHADA file. Associate object name with its c++-code name mapped_name
 #In same rare case the two name can differ.
@@ -186,8 +211,13 @@ objects = OrderedDict([("Particles", particles)])
 #Map object (cpp name) to types including intermediat object, i.e. not defined in LHADA file.
 types = { particles: "Particles"}
 
-#list of defined cuts
-cuts = []
+#list of defined cuts with their dependencu on other cut block
+# key: cut block name, value: CutNode object
+cutblocks = {}
+
+# List of cutflows.
+# key: cut flow name, [cut list]
+cutflows = OrderedDict()
 
 #list of functions defined in the lhada file
 #the list maps function names to its FuncDef object instance
@@ -233,43 +263,52 @@ def tonth(i):
     else:
         return "%dth" % i
 
-def gen_RecoObj(object, partName, etaAcc, effTag, smearTag, cuts):
-    includes.append("Rivet/Tools/SmearingFunctions.hh")
+def gen_RecoObj(object, partName, etaAcc, effTag, smearTag, cuts, localVar):
+    global proj_init, obj_def
+    insert_include("Rivet/Tools/SmearingFunctions.hh")
+    insert_include("Rivet/Projections/PromptFinalState.hh")
+    insert_include("Rivet/Projections/SmearedParticles.hh")
     pidName = partName.upper()
     truthParts = unique_name("Truth%ss" % partName)
-    truthPartFS = unique_name("Truth%sFS" % partName) 
-    proj_init = multi_replace('''PromptFinalState %TRUTH_PART_FS%(Cuts::abseta < %ETA_ACC% && Cuts::abspid == PID::%PID_NAME%, true, true);
+    truthPartFS = unique_name("Truth%sFS" % partName)
+    if localVar:
+        type_decl = "Particles "
+    else:
+        type_decl = ""
+    #endif
+    proj_init += multi_replace('''PromptFinalState %TRUTH_PART_FS%(Cuts::abseta < %ETA_ACC% && Cuts::abspid == PID::%PID_NAME%, true, true);
 declare(%TRUTH_PART_FS%, "%TRUTH_PARTS%");
-declare(SmearedParticles(es, %EFF_TAG%, %SMEAR_TAG%), %OBJECT%)''',
+declare(SmearedParticles(%TRUTH_PART_FS%, %EFF_TAG%, %SMEAR_TAG%), "%OBJECT%");\n''',
                                 { "%TRUTH_PART_FS%": truthPartFS, \
                                   "%EFF_TAG%": effTag, \
                                   "%SMEAR_TAG%": smearTag, \
                                   "%ETA_ACC%": etaAcc, \
                                   "%PID_NAME%": pidName, \
                                   "%TRUTH_PARTS%": truthParts, \
-                                  "%OBJECT%": object
-                                })
+                                  "%OBJECT%": object}
+    )
     #FIXME: postpone the projection until the object is used, so we can includes the cuts
     #and avoid an intermediate object ?
     if cuts is None:
         cuts = ""
-    obj_def = multi_replace('''%OBJECT% = applyProjection<ParticleFinder>(event, "%OBJECT%").particles(%CUTS%)
+    obj_def += multi_replace('''%TYPE_DECL%%OBJECT% = applyProjection<ParticleFinder>(event, "%OBJECT%").particles(%CUTS%);
 ''', { "%OBJECT%": object, \
-       "%CUTS%": cuts});
+       "%CUTS%": cuts, \
+       "%TYPE_DECL%": type_decl});
     return ("Particles", object)
 #enddef
 
-def gen_ElectronAtlas_00(object, cuts):
-    return gen_RecoObj(object, "Electron", "2.5", "ELECTRON_EFF_ATLAS_RUN2", "ELECTRON_SMEAR_ATLAS_RUN2", cuts)
+def gen_ElectronAtlas_00(object, cuts, localVar):
+    return gen_RecoObj(object, "Electron", "2.5", "ELECTRON_EFF_ATLAS_RUN2", "ELECTRON_SMEAR_ATLAS_RUN2", cuts, localVar)
 
-def gen_MuonAtlas_00(object, cuts):
-    return gen_RecoObj(object, "Muon", "2.7", "MUON_EFF_ATLAS_RUN2", "MUON_SMEAR_ATLAS_RUN2", cuts)
+def gen_MuonAtlas_00(object, cuts, localVar):
+    return gen_RecoObj(object, "Muon", "2.7", "MUON_EFF_ATLAS_RUN2", "MUON_SMEAR_ATLAS_RUN2", cuts, localVar)
 
-def gen_ElectronCms_00(object, cuts):
-    return gen_RecoObj(object, "Electron", "2.5", "ELECTRON_EFF_CMS_RUN2", "ELECTRON_SMEAR_CMS_RUN2", cuts)
+def gen_ElectronCms_00(object, cuts, localVar):
+    return gen_RecoObj(object, "Electron", "2.5", "ELECTRON_EFF_CMS_RUN2", "ELECTRON_SMEAR_CMS_RUN2", cuts, localVar)
 
-def gen_MuonCms_00(object, cuts):
-    return gen_RecoObj(object, "Muon", "2.7", "MUON_EFF_CMS_RUN2", "MUON_SMEAR_CMS_RUN2", cuts)
+def gen_MuonCms_00(object, cuts, localVar):
+    return gen_RecoObj(object, "Muon", "2.7", "MUON_EFF_CMS_RUN2", "MUON_SMEAR_CMS_RUN2", cuts, localVar)
 
 
 ### def gen_ElectronAtlas_00(object):
@@ -329,7 +368,7 @@ declare(%JET_PROJ%, "%JET_PROJ%");
     return jetAk04Eta48Proj
     
     
-def gen_MetAtlas_00(object, cuts):
+def gen_MetAtlas_00(object, cuts, localVar):
     global proj_init, obj_def, vector3ToFourMometum
     truthMET   = unique_name("TruthMET")
     caloFS = getAtlasCaloFs()
@@ -338,15 +377,21 @@ def gen_MetAtlas_00(object, cuts):
     #endif
     insert_include("Rivet/Projections/SmearedMET.hh")
     insert_include("Rivet/Projections/MissingMomentum.hh")
+    if localVar:
+        type_decl = "FourMomentum "
+    else:
+        type_decl = ""
+    #endif
     proj_init += multi_replace('''MissingMomentum %TRUTH_MET%(%CALO_FS%);
 declare(%TRUTH_MET%, "%TRUTH_MET%");
 declare(SmearedMET(%TRUTH_MET%, MET_SMEAR_ATLAS_RUN2), "%RECO_MET%");
 ''',  { "%CALO_FS%": caloFS, \
         "%TRUTH_MET%": truthMET, \
         "%RECO_MET%": object})
-    obj_def += multi_replace('''%OBJECT% = - toFourMomentum(applyProjection<SmearedMET>(event, "%RECO_MET%").vectorMPT());
+    obj_def += multi_replace('''%TYPE_DECL%%OBJECT% = - toFourMomentum(applyProjection<SmearedMET>(event, "%RECO_MET%").vectorMPT());
 ''', { "%OBJECT%": object, \
-       "%RECO_MET%": object})
+       "%RECO_MET%": object, \
+       "%TYPE_DECL%": type_decl})
     vector3ToFourMometum = True
     return ("FourMomentum", object)
 #enddef    
@@ -366,15 +411,21 @@ def getJetAk04Atlas_00_proj():
     #endif
     return jetAk04Atlas_00_proj
     
-def gen_JetAk04Atlas_00(object, cuts):
+def gen_JetAk04Atlas_00(object, cuts, localVar):
     global obj_def
     if cuts is None:
         cuts = ""
+    if localVar:
+        type_decl = "Jets "
+    else:
+        type_decl = ""
+    #endif
     recoJetProj = getJetAk04Atlas_00_proj()
-    obj_def += multi_replace('''%OBJECT% = %PROJ%.jetsByPt(%CUTS%);
+    obj_def += multi_replace('''%TYPE_DECL%%OBJECT% = %PROJ%.jetsByPt(%CUTS%);
 ''', {"%OBJECT%": object, \
       "%CUTS%": cuts, \
-      "%PROJ%": recoJetProj})
+      "%PROJ%": recoJetProj, \
+      "%TYPE_DECL%": type_decl})
     return ("Jets", object)
     
 #Supported 'external' object and map with the function that generates the Rivet code
@@ -851,9 +902,8 @@ def block_replace(s, replace_map):
         #endif
     return r
 
-def gen_cut(collection, observable, operator, value):
-    mess("Generating code for cut %s.%s %s %s"  % (collection, observable, operator, value))
-    
+#def gen_cut(collection, observable, operator, value):
+#    mess("Generating code for cut %s.%s %s %s"  % (collection, observable, operator, value))   
     
 def check_args(args, specs):
     args_ = {}
@@ -933,7 +983,7 @@ def gen_apply(func_name, input_obj, args, cuts, output_obj):
 
         if cuts:
             tmp_obj = unique_name("filtered_" + input_obj)
-            obj_def += gen_collection_filter_code(get_obj_type(input_obj), input_obj, cuts, tmp_obj) + "\n\n"
+            obj_def += gen_collection_filter_code(get_obj_type(input_obj), input_obj, cuts, tmp_obj, True) + "\n\n"
             input_obj = tmp_obj
         
         obj_def   += multi_replace('''%OUTPUT_OBJ% = %FUNC_NAME%(%ARGS%);\n\n''',
@@ -949,13 +999,14 @@ def gen_no_apply_object(input_obj, cuts, output_obj):
     if len(cuts) == 0:
         obj_def = '''%s %s = %s;\n''' % (get_obj_type(input_obj), output_obj, input_obj)
     else:
-        obj_def += gen_collection_filter_code(get_obj_type(input_obj), input_obj, cuts, output_obj)
+        obj_def += gen_collection_filter_code(get_obj_type(input_obj), input_obj, cuts, output_obj, False)
     #endif
     return (get_obj_type(input_obj), output_obj)
 
 def gen_external(external_object_name, internal_object_name, cuts):
     global lhadafile, external_objs, obj_def
     rivet_cut = None
+    tmpObj = False
     if len(cuts) > 0:
         rivet_cut = compose_rivet_cuts(cuts)
         if rivet_cut:
@@ -963,19 +1014,22 @@ def gen_external(external_object_name, internal_object_name, cuts):
         else:
             #cuts could not be expressed as a rivet cut object
             #and will be applied as a second step
-            obj_name = unique_name("pre%s" % internal_object_name.capitalize())    
+            obj_name = unique_name("pre%s" % internal_object_name.capitalize())
+            tmpObj = True
+    else:
+        obj_name = unique_name(internal_object_name)
     try:
         gen_func = external_objs[external_object_name]
     except KeyError:
         raise RuntimeError("Error. File %s, line %d. External object '%s' is not supported" % (lhadafile.name, lhadafile.current_line, external_object_name))
     #FIXME: treatement of cuts...
-    (obj_type, obj_name) =  gen_func(internal_object_name, rivet_cut)
+    (obj_type, obj_name) =  gen_func(obj_name, rivet_cut, tmpObj)
     
     if len(cuts) > 0 and not rivet_cut:
         #cuts could not be expressed as a rivet cut object
         pre_obj = obj_name
         obj_name = unique_name(internal_object_name)
-        obj_def += gen_collection_filter_code(obj_type, pre_obj, cuts, obj_name)
+        obj_def += gen_collection_filter_code(obj_type, pre_obj, cuts, obj_name, False)
     #endif
     return (obj_type, obj_name)
 
@@ -1035,11 +1089,15 @@ def gen_external(external_object_name, internal_object_name, cuts):
 ####     #endif
 ####     return cut_expr
 
-def gen_collection_filter_code(coltype, incol, cuts, outcol):
+def gen_collection_filter_code(coltype, incol, cuts, outcol, localVar):
     '''Generate c++ code that filters the object collection <incol> by applying cuts listed in the parameter <cuts> to produce the new collection <outcol>. Returns the generated code.'''
     expr = ""
     op = ""
     simple_cut = re.compile(r"\s*\(?(pt|E|m|rapidity|\|\s*rapidity\s*\|charge|\|\s*charge\s*\|pid|\|\s*pid\s*\|phi)\s*(<|>|<=|>=|!=|==)\s*((0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?\)?")
+    if localVar:
+        type_decl = coltype + " " + outcol + ";\n"
+    else:
+        type_decl = ""
     for c in cuts:
 #        subst_map = {
 #            r"\|[\s]*eta[\s]*\|": "p.abseta()",
@@ -1052,23 +1110,22 @@ def gen_collection_filter_code(coltype, incol, cuts, outcol):
 #        for k,v in subst_map:
 #            subst_expr = re.subn(v, k)
 #        subst_expr = multi_replace(c, subst_map)
-        subst_expr = parse_cut_line(c, "p.")
+        subst_expr = parse_cut_line(c, "p.")[0]
         if not simple_cut.match(c):
             subst_expr = "(" + subst_expr + ")"
         expr += op + subst_expr
         op = "\n" + indent*2 + "&& ";
     #next c
-    code = multi_replace('''%COLTYPE% %OUTCOL%;
-for(const auto& p: %INCOL%){
+    code = multi_replace('''%TYPE_DECL%for(const auto& p: %INCOL%){
 %_%if(%EXPR%){
 %_%%_%%OUTCOL%.push_back(p);
 %_%}
 }
 
-''', {'%COLTYPE%': coltype,
-       '%OUTCOL%': outcol,
-       '%INCOL%': incol,
-       '%EXPR%': expr,
+''', {'%TYPE_DECL%': type_decl, \
+      '%INCOL%': incol, \
+      '%EXPR%': expr, \
+      '%OUTCOL%': outcol, \
        '%_%': indent})
     return code
 
@@ -1393,9 +1450,9 @@ def parse_table_block():
 
 def parse_cut_block():
     """Parsing a cut block and generate corresponding code"""
-    global cut_names, func_codes, lhadafile
+    global cut_names, func_codes, lhadafile, cutblocks
     mess("Parsing cut block...")
-    global cuts
+    dependencies = []
     line1 = lhadafile.current_line_contents
     toks = line1.split()
     if len(toks) < 2:
@@ -1403,18 +1460,18 @@ def parse_cut_block():
     #endif
     cut_name = toks[1]
     mess("Cut name: " + cut_name)
-    if cut_name in cuts:
+    if cut_name in cutblocks:
         raise RuntimeError("Duplicate definition of object %s found line %d of file %s.\t%s\n" % (il, lhadafile.name, line1))
-    cuts.append(cut_name)
+    cutblocks[cut_name] = CutNode(cut_name)
 
-    func_name = "cut_%s" % cut_name
+#    func_name = "cut_%s" % cut_name
 
-    cutid = unique_name("k%s" % cut_name);
-    cut_ids.append(cutid)
+#    cutid = unique_name("k%s" % cut_name);
+#    cut_ids.append(cutid)
     
-    func_code = """bool %s(){
-    bool r = true;
-""" % func_name
+#    func_code = """bool %s(){
+#    bool r = true;
+#""" % func_name
     line_offset = -1
     while True:
         lhadafile.save_pos()
@@ -1428,21 +1485,49 @@ def parse_cut_block():
             lhadafile.restore_pos()
             break
         toks = l.split()
-        if toks[0] == 'select':
-            func_code += "    r = r && (" + parse_cut_line(" ".join(toks[1:]), "") + ");\n"
-        elif toks[0] == 'reject':
-            func_code += "    r = r && !(" + parse_cut_line(" ".join(toks[1:]), "") + ");\n"
+        if toks[0] in ['select', 'reject']:
+            (expr, extra_dependencies) = parse_cut_line(" ".join(toks[1:]), "")
+            cutblocks[cut_name].add_dependencies(extra_dependencies)
+            if toks[0] == 'select':
+                cutblocks[cut_name].cuts.append(expr)
+            elif toks[0] == 'reject':
+                cutblocks[cut_name].cuts.append(expr)
+            #endif
         else:
             raise RuntimeError("Syntax error in line %d of file %s. Every line of the body of a cut block should start with the keyword 'select'.\n\t%s" % (lhadafile.current_line, lhadafile.name, l))
         #endif
         #FIXME: handle duplicate names
-    func_code += '''    return cutflow.fill(%s, r);
-}''' % cutid
-    func_codes.append(func_code)
+        
 
+def invert_cond(expr):
+    '''Invert a mathematical condition expression'''
+    r = re.compile(r'([^()+-^*/&|=<>]+)(=|==|!=|<|>|<=|>=)([^()+-^*/&|=<>]+)')
+    ops = (('==','!='), ('<', '>='), ('<=', '>'))
+    newop = None
+    if r.match(expr):
+        l, op, r = r.groups()
+        if op == '=':
+            op = '=='
+        for op1, op2 in ops:
+            if op == op1:
+                newop = op2
+                break;
+            elif op == op2:
+                newop = op1
+                break;
+            #endif
+        #next op1,op2
+    #endif
+    if newop:
+        return l + newop + r;
+    else:
+        return "!(%s)" % expr
+#endif invert_cond
+    
     
 def parse_cut_line(l, pref):
     ''' '''
+    dependencies = []
     l = l.strip()
     r = ""
     toks_ = re.split("([\W]+)", l)
@@ -1523,8 +1608,9 @@ def parse_cut_line(l, pref):
                 r += tok
                 continue
             #endif
-            if tok in cuts:
-                r += "cut_%s()" % tok
+            if tok in cutblocks:
+                r += "cut_%s(w)" % tok
+                dependencies.append(cutblocks[tok])
                 continue
             #endif
             if tok in funcs_lhada:
@@ -1540,7 +1626,7 @@ def parse_cut_line(l, pref):
             continue
         r += tok
         #TODO: handle function named arguments
-    return r.rstrip()
+    return (r.rstrip(), dependencies)
 
 #under dev# def gen_histo_code():
 #under dev#     """Generates the code to book and fill histograms of the analysis. For a cut and count analysis, an histogram with one enty per region is filled"""
@@ -1631,20 +1717,64 @@ def canonize_analysis_name(name):
     return name
 
 
-def gen_cutid_decl_code():
-    '''Generates c++ code which defines the cut ids used for the cutflow (cut_id_decl) and initialisation list for the Cutflow object (init). Returns (cut_id_decl, init) '''
-    code_decl = "enum {"
-    code_init = "{"
-    s = ""
-    for c in cut_ids:
-        code_decl += s + c
-        code_init += s + '"%s"' % c
-        s = ", "
+def gen_cutflow_decl_code():
+    '''Generates c++ code which defines the ids used for the cutflow (cut_id_decl) and initialisation list for the Cutflow object (init). Returns (cut_id_decl, init) '''
+    decl_cf_ids = "enum {" + ", ".join([ "k%s" % x.capitalize() for x in cutflows]) + "} CutFlowIds;"
+    cfs_init = ""
+    sep = ""
+    for cf, cl in cutflows.iteritems():
+        cfs_init += 'cutflows.addCutflow("%s", {%s});\n' % (cf, ", ".join([ '"%s"' % x.name for x in cl]))
     #next c
-    code_decl += "} CutIds;\n"
-    code_init += "}"
-    return (code_decl, code_init)
-        
+    cfs_decl = '''///Tracks the event counts after each cut
+Cutflows cutflows;'''
+    
+    return (decl_cf_ids, cfs_decl, cfs_init)
+
+def gen_cut_func_code():
+    '''Generate c++ code for the 'cut' block.'''
+    # Algorithm: we pass through the sequence of cut blocks one cut
+    # flow after the other and generate the c++ code of a cut block
+    # the first time it appears in the pass.
+    # That allows us to determine the cut order. By construction
+    # a given cut should appear in the same sequence order for all
+    # the cut flows it is in.
+    code = ""
+    implemented_cut_blocks = []
+    for cf, cl in cutflows.iteritems():
+        cut_order = 0
+        for cutblock in cl:
+            make_code = (cutblock.name not in implemented_cut_blocks)
+            if make_code:
+                func_name  = unique_name("cut_%s" % cutblock.name)
+                implemented_cut_blocks.append(cutblock.name)
+                cutblock.order = cut_order
+                code += multi_replace('''bool %FUNC%(double w){
+%I%std::vector<int> cfs = {%CUTFLOW_LIST%};
+%I%bool r = true;
+''', {"%I%": indent, \
+      "%FUNC%": func_name, \
+      "%CUTFLOW_LIST%": ", ".join(["k%s" % x.name for x in cutblock.cutflows])})
+            else: #code already generated
+                if cutblock.order != cut_order:
+                    raise RuntimeError("Error detected in the cut flows. The numbers of cuts preceeding the cuts of cut block %s dependes on the cut flow, while it is expected that Lhada17 rules prevent this situation." % cutblock.name)
+            #endif make_code
+            for expr in cutblock.cuts:
+                if make_code:
+                    code += multi_replace('''
+%I%r = r && fillCutFlows(cfs, %CUT_ORDER%,
+%I%                      %EXPR%,
+%I%                      w);''',  {"%I%": indent, \
+       "%CUT_ORDER%": str(cut_order), \
+        "%EXPR%": expr})
+                #endif make_code
+                cut_order += 1 #expr. sequence order in the cut flow
+            #next expr
+            if make_code:
+                code += "\n%sreturn r;\n};\n\n" % indent
+        #next cutblock
+    #next cf, cl
+    return code
+#enddef gen_cut_func_code
 
 def gen_code():
     global analysis_code_template, includes, include_block, objects, func_codes, vector3ToFourMometum
@@ -1664,9 +1794,10 @@ def gen_code():
 
     analysis_name = canonize_analysis_name(args.analysis_name)
 
-
-    (cutid_decl, cutid_init) = gen_cutid_decl_code()
-
+    #FIXME
+    #    (cutid_decl, cutid_init) = gen_cutid_decl_code()
+    (decl_cf_ids, cfs_decl, cfs_init) = gen_cutflow_decl_code()
+    
     #Inplement the vector3 -> FourMometum cast operator
     #if it is used:
     if vector3ToFourMometum:
@@ -1678,14 +1809,20 @@ def gen_code():
     #endif
 
     func_codes.extend(gen_func_block())
-    
-    # we substitude the code block in two steps in
+
+    func_codes.append(gen_cutflowfill_func_code())
+
+    func_codes.append(gen_cut_func_code())
+
+    # we substitute the code block in two steps in
     # order to check if the instance 'particles' is used
     # before generating the code that creates it.
     
     # Inserts complete code blocks in the code template:
     subst_map = {"%INCLUDE_BLOCK%": include_block,
-                 "%CUT_IDS%": cutid_decl,
+                 "%DECL_CF_IDS%": decl_cf_ids,
+                 "%CFS_DECL%": cfs_decl,
+                 "%CFS_INIT%": cfs_init,
                  "%PROJECTION_INIT%": proj_init,
                  "%COUNTER_INIT%": counter_init,
                  "%OBJECT_DEFINITIONS%": obj_def,
@@ -1694,13 +1831,12 @@ def gen_code():
                  "%OBJECT_CUTS%": "\n\n".join(obj_cuts), 
                  "%FUNCTION_DEFINITIONS%": "\n\n".join(func_codes),
                  "%WEIGHT%" : "",
-                 "%CUTS%": "",
+                 "%CUTS%": gen_cut_call_code(),
                  "%COUNTER_FILL%":""
     }
 
     code = block_replace(analysis_code_template, subst_map)
-    subst_map = { "%ANALYSIS_NAME%": analysis_name,
-                  "%CUTFLOW_INIT%": cutid_init}
+    subst_map = { "%ANALYSIS_NAME%": analysis_name}
     code = multi_replace(code, subst_map)
     #check if particles objet is used
     re_particles = re.compile(r'\bparticle\b')
@@ -1751,9 +1887,62 @@ def main():
 
     parse(args.lhadafile)
 
-    gen_code()
+    build_cutflows()
     
-                        
+    gen_code()
+
+def build_cutflows():
+    '''Build the cutflow. To be called once the CutNode tree is built. This function modified the CutNode's stored in cutblocks.'''
+    global cutblocks, cutflows
+    for v in cutblocks.values():
+        if v.endpoint:
+            cut_sequence = []
+            c = v
+            while c:
+                c.cutflows.append(v)
+                cut_sequence.insert(0, c)
+                if len(c.dependencies()) > 0:
+                    c = c.dependencies()[0]
+                else:
+                    c = None
+            cutflows[v.name] = cut_sequence
+            #endwhile
+        #endif
+    #next v
+
+
+def gen_cut_call_code():
+    code = '''double w = event.weight();
+cutflows.fillinit();
+'''
+    for cf in cutflows:
+        code += "cut_%s(w);\n" % cf
+    code += "\n"
+    return code
+#enddef
+
+def gen_cutflowfill_func_code():
+    '''Generate c++ code for the fillCutFlows function'''
+    return multi_replace('''bool fillCutFlows(const std::vector<int>& cfs, int icut, bool passed, double w){
+%I%for(auto& icf: cfs) cutflows[icf].fill(icut, passed, w);
+%I%return passed;
+}\n\n''', { "%I%": indent})
+    
+def print_dependencies():
+    '''Help function for debugging'''
+    for v in cutblocks.values():
+        if v.endpoint:
+            sys.stdout.write("%s " % v.name)
+            print_dep(v, 0)
+
+
+def print_dep(c, level):
+    '''Help function for debugging'''
+    for d in c.dependencies():
+        sys.stdout.write("%s-> %s" % ( "  " * level, d.name))
+        print_dep(d, level + 1)
+        sys.stdout.write("\n")
+    
 if __name__ == "__main__":
     try:
         main()
