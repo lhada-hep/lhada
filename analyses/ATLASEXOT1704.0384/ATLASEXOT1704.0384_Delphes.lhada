@@ -35,7 +35,7 @@ object tightphotons
 object electrons
   take Delphes_Electron
   select PT > 7
-  select |eta| < 2.7
+  select |eta| < 2.47
 
 object muons
   take Delphes_Muon
@@ -46,6 +46,7 @@ object jets
 # Delphes jets
   take Delphes_Jet
   select PT > 20
+  select |eta| < 4.5
 
 object cleanjets
   take jets
@@ -54,31 +55,28 @@ object cleanjets
 
 object cleanelectrons
   take electrons
-  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRlj
-  reject dRlj < 0.4
+  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRej
+  reject dRej < 0.4
 
 object cleanmuons
   take muons
-  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRlj
-  reject dRlj < 0.4
-
-object verycleanjets
-  take cleanjets
-  apply dR(Eta, Phi, photons.Eta, photons.Phi) dRje
-  reject dRje < 0.4
-
-object jetsSR
-  take verycleanjets
-  select PT > 30
-  select |Eta| < 4.5
+  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRmuj
+  reject dRmuj < 0.4
 
 object MET
   take Delphes_MissingET
 
+object jetsSR
+  take cleanjets
+  select PT > 30
+  apply dR(Eta, Phi, photons.Eta, photons.Phi) dRjp
+  reject dRjp < 0.4
+  apply dphi(photon[0].Phi, MET.Phi) dphijmet
+  reject dphijmet < 0.4
+
 object scalarHT
   # scalar sum of jets, electrons, photons, muons
   take Delphes_scalarHT
-
 
 # VARIABLES
 
@@ -89,11 +87,11 @@ variable METoverSqrtSumET
 
 cut preselection
 # Pre-selection cuts
-  select photons[0].PT > 150
-  select dphi(photon[0].Phi, MET.Phi) > 0.4
-! select METoverSqrtSumET > 8.5
+  select tightphotons.size > 0
+  select tightphotons[0].PT > 150
+  select dphi(tightphoton[0].Phi, MET.Phi) > 0.4
+  select METoverSqrtSumET > 8.5
   reject jetsSR.size > 1
-  reject dphi(jetsSR.Phi, MET.Phi) > 0.4
   select cleanmuons.size == 0
   select cleanelectrons.size == 0
 
