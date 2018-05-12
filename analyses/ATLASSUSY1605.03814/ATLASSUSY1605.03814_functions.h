@@ -17,37 +17,21 @@ double calc_Meff(std::vector<LhadaJet> jets, FourMomentum MET) {
   return meff;
 }
 
-double calc_dphijNjle3METmin(const std::vector<LhadaJet>& jets, const FourMomentum& MET) {
-  if (jets.size() < 2)
-    return 0;
-  unsigned njets = 3;
-  if (jets.size() == 3) njets = 2;
+double calc_dPhiMetJets(const std::vector<LhadaJet>& jets, int njets, const FourMomentum& MET) {
+  if (jets.size() < (unsigned) njets) njets = jets.size();
   double dphimin = 999;
-  for(unsigned ij = 0; ij > njets; ++ij){
+  for(int ij = 0; ij < njets; ++ij){
     double dphi = deltaPhi(jets[ij], MET);
     if (dphi < dphimin) dphimin = dphi;
   }
   return dphimin;
 }
 
-double calc_dphijNjgt3METmin(const std::vector<LhadaJet>& jets, const FourMomentum& MET) {
-  double dphimin = 999;
-  if (jets.size() <= 3)
-    return 0;
-  for(const auto& j: jets){
-    double dphi = deltaPhi(MET, j);
-    if (dphi < dphimin) dphimin = dphi;
-  }
-  return dphimin;
-}
-
-double calc_METoverMeffNJ(const std::vector<LhadaJet>& jets, unsigned njets, const FourMomentum& MET) {
-  if (jets.size() < njets) {
-    return 0;
-  }
+double calc_METoverMeffNJ(const std::vector<LhadaJet>& jets, int njets, const FourMomentum& MET) {
+  if (jets.size() < (unsigned) njets) njets = jets.size();
   double meff = MET.pt();
-  for (unsigned i = 0; i < njets; i++) {
-    meff += jets[i].pt();
+  for (int ij = 0; ij < njets; ij++) {
+    meff += jets[ij].pt();
   }
   return MET.pt() / meff;
 }
