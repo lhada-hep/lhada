@@ -315,7 +315,7 @@ def sortObjects(objects):
 #--------------------------------------------------------------------------------
 def extractBlocks(filename):
     if DEBUG > 0:
-        print '\nBEGIN( extracBlocks )'
+        print '\nBEGIN( extractBlocks )'
         
     from copy import deepcopy
     import re
@@ -337,7 +337,7 @@ def extractBlocks(filename):
     fcallname  = re.compile('[a-zA-Z_][\w_]*\s*(?=[(])')
     
     #--------------------------------------------    
-    # look over lhada records
+    # loop over lhada records
     #--------------------------------------------    
     blocks = {}
     bname  = None
@@ -362,14 +362,14 @@ def extractBlocks(filename):
             # block type, block name
             btype, bname = t
 
-            # modify internal function and block names in an
+            # modify internal function and variable names in an
             # attempt to avoid name collisions
             if btype == 'function':
                 bname = '_%s' % bname
             elif btype == 'variable':
                 bname = '%s_' % bname
 
-            # do not allow duplicate block names
+            # fall on sword if we have duplicate block names
             if blocks.has_key(bname):
                 boohoo('duplicate block name %s at line'\
                            '\n%4d %s\n' % (bname, iline, record))
@@ -409,7 +409,8 @@ def extractBlocks(filename):
 
         # if block type is object, strip away words within this
         # block that are not object names using set intersection:
-        # C = A and B
+        # C = A and B. the remaining words will be used to sort
+        # the blocks according to dependency
         if blocktype == 'object':
             words = objectnames.intersection(words)
         elif blocktype == 'cut':
@@ -528,6 +529,7 @@ def process_functions(names, blocks):
         else:
             namespace = ''
         extname = namespace + name
+        # prefix internal name with an "_"
         intname = '_%s' % replace(extname, '::', '_')
 
         if DEBUG > 0:
@@ -629,8 +631,8 @@ expected arguments %s, but %s found in LHADA file
 #--------------------------------------------------------------------------------
 # check whether to start an inner loop.
 # we start an inner loop if the next record contains a variable
-# of the form <objectname>.<variable>. for now we do not allow
-# nested inner loops
+# of the form <objectname>.<variable> and objectname is not
+# a singleton. for now we do not allow nested inner loops
 def beginInnerLoop(records, index, blocktypes):
     if index >= len(records)-1: return None
         
@@ -683,14 +685,12 @@ def endInnerLoop(records, index, loopvar):
         return False
     
 def convert2cpp(record, btype, blocktypes):
-    #print record
     # do some simple fixes
     record = replace(record, "|", "@")
     record = replace(record, "[", ";:")
     record = replace(record, "]", ":;")
     record = cppAND.sub('&&', record)
     record = cppOR.sub('||', record)
-    #record = cppEQEQ.sub('==', record)
 
     # use a set to avoid recursive edits
     words  = set(getvars.findall(record))
@@ -909,6 +909,7 @@ perhaps you're missing a return value in:
             
             objdef += '%s%sdouble %s = %s;\n' % (tab, tab4, rvalue, fcall)
             objdef += '%s%sp("%s", %s);\n' % (tab, tab4, lower(rvalue), rvalue)
+            
             # cache variables defined within loop
             loopvar.add(rvalue)
 
@@ -967,8 +968,10 @@ def process_objects(names, blocks, blocktypes):
     tab4 = ' '*4
     tab6 = ' '*6
     tab8 = ' '*8
+    
     # some objects are singletons. try to guess which ones
-    single = re.compile('missing.*et|met|event|scalar')
+    # this is very simpleminded; will have to do better later
+    single = re.compile('missing.*et|met|event|scalar|ht')
 
     extobjdef = ''
     intobjdef = ''
