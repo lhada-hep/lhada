@@ -25,8 +25,6 @@
 #pragma link C++ class commandLine;
 #pragma link C++ class matchedPair;
 #pragma link C++ class ptThing;
-#pragma link C++ class TEParticle;
-#pragma link C++ class vector<TEParticle>;
 
 #pragma link C++ class itreestream;
 #pragma link C++ class otreestream;
@@ -44,14 +42,14 @@
 #pragma link C++ class eventBuffer::Electron_s;
 #pragma link C++ class vector<eventBuffer::Electron_s>;
 
+#pragma link C++ class eventBuffer::FatJet_s;
+#pragma link C++ class vector<eventBuffer::FatJet_s>;
+
 #pragma link C++ class eventBuffer::GenJet_s;
 #pragma link C++ class vector<eventBuffer::GenJet_s>;
 
 #pragma link C++ class eventBuffer::Jet_s;
 #pragma link C++ class vector<eventBuffer::Jet_s>;
-
-#pragma link C++ class eventBuffer::Jet2_s;
-#pragma link C++ class vector<eventBuffer::Jet2_s>;
 
 #pragma link C++ class eventBuffer::Muon_s;
 #pragma link C++ class vector<eventBuffer::Muon_s>;

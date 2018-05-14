@@ -46,7 +46,7 @@
 //          22-Nov-2010 Allow reading of multiple trees using friend
 //                      mechanism
 //          22-Nov-2011 Handle storing of strings
-//$Revision: 1.5 $
+//          01-Mar-2018 Fix chain/friend interactions (at 35,000 feet!)
 //----------------------------------------------------------------------------
 #include <vector>
 #include <string>
@@ -71,17 +71,19 @@
 struct Field
 {
   Field() 
-    : srctype(' '),
-      iotype(' '),
-      isvector(false),
-      iscounter(false),
-      maxsize(0),
-      branch(0),
-      leaf(0),
-      address(0),
-      branchname(""),
-      leafname(""),
-      fullname("")
+  : srctype(' '),
+    iotype(' '),
+    isvector(false),
+    iscounter(false),
+    maxsize(0),
+    chain(0),
+    branch(0),
+    leaf(0),
+    address(0),
+    treename(""),
+    branchname(""),
+    leafname(""),
+    fullname("")
   {}
   
   virtual ~Field() {}
@@ -91,11 +93,13 @@ struct Field
   bool   isvector;        /// True if vector type
   bool   iscounter;       /// true if this is a leaf counter
   int    maxsize;         /// Maximum number of elements in source variable
-  
+
+  TChain*  chain;         /// Chain to which this field is bound
   TBranch* branch;        /// Branch pertaining to source
   TLeaf*   leaf;          /// Leaf pertaining to source
   void*    address;       /// Source address
-  
+
+  std::string treename;   /// Tree name
   std::string branchname; /// Name of branch
   std::string leafname;   /// Name of T-leaf!
   std::string fullname;   /// Full name of branch/T-leaf!
@@ -162,16 +166,10 @@ class itreestream
       Note: <i>filename</i> is a string of one of more filenames, each of
       which can have wildcard characters.
   */
-  itreestream(std::string filename, int bufsize=1000);
+  itreestream(std::string filename, std::string treename="", int bufsize=1000);
 
   ///
-  itreestream(std::string filename, std::string treename, int bufsize=1000);
-
-  ///
-  itreestream(std::vector<std::string>& filenames, int bufsize=1000);
-
-  ///
-  itreestream(std::vector<std::string>& filenames, std::string treename,
+  itreestream(std::vector<std::string>& filenames, std::string treename="",
               int bufsize=1000);
 
   ///
@@ -307,6 +305,9 @@ class itreestream
   /// Return names of name/value pairs.
   std::vector<std::string> names();
 
+  /// Return names of trees.
+  std::vector<std::string> treenames();
+
   ///
   std::vector<double> vget();
 
@@ -338,8 +339,10 @@ class itreestream
   int     _index;
   std::vector<double> _buffer;
 
-  Data         data;
-  SelectedData selecteddata;
+  Data          data;
+  SelectedData  selecteddata;
+  
+  std::map<std::string, TChain*> _chainmap;
   
   int     _bufoffset;
   int     _bufcount;
@@ -349,8 +352,6 @@ class itreestream
   std::vector<int>          branchtab;
   std::vector<std::string>  filepath;
 
-  std::vector<TChain*> _chainlist;
-
   void _open(std::vector<std::string>& filenames, 
              std::vector<std::string>& treenames);
   void _getbranches(TBranch* branch, int depth);
@@ -358,10 +359,11 @@ class itreestream
   void _select     (std::string name, void* address, int maxsize, 
                     char srctype, bool isvector=false);
   void _update();
-  void _gettree(TDirectory* dir, int depth=0);
+  void _gettree(TDirectory* dir, int depth=0, std::string name="");
 
   bool _delete;
   std::string _treename;
+  std::vector<std::string>  _treenames;
 };
 
 /// Model an output stream of trees of the same species.
@@ -524,7 +526,7 @@ class otreestream
   std::vector<double> _databuf;
   int    _autosavecount;
 
-  SelectedData selecteddata;
+  std::map<std::string, Field*> selecteddata;
 
   std::vector<std::string>      branchname;
   std::vector<int*> strsize;

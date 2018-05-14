@@ -1,11 +1,13 @@
 #----------------------------------------------------------------------------
 # Description: Makefile to build analyzers
-# Created:     Fri Feb  2 16:31:49 2018 by mkanalyzer.py
+# Created:     Sun May 13 22:04:56 2018 by mkanalyzer.py
 # Author:      Shakespeare's ghost
 #----------------------------------------------------------------------------
 ifndef ROOTSYS
 $(error *** Please set up Root)
 endif
+
+name    := delphesAnalyzer
 
 # Sub-directories
 srcdir	:= src
@@ -26,7 +28,7 @@ endif
 #-----------------------------------------------------------------------
 # sources and objects
 #-----------------------------------------------------------------------
-header  := $(incdir)/tnm.h $(incdir)/TEParticle.h $(incdir)/DelphesAdapter.h
+header  := $(incdir)/tnm.h
 linkdef := $(incdir)/linkdef.h
 cinthdr := $(srcdir)/dictionary.h
 cintsrc := $(srcdir)/dictionary.cc
@@ -80,8 +82,8 @@ CPPFLAGS:= -I. -I$(incdir) -I$(srcdir) $(shell root-config --cflags)
 CXXFLAGS:= -c -g -O2 -ansi -Wall -pipe -fPIC
 
 #	C++ Linker
-#   set default path to shared library
-LD	:= $(LINK) -Wl,-rpath,$(PWD)/$(libdir)
+#   set path to ROOT libraries (Mac OS workaround)
+LD	:= $(LINK) -Wl,-rpath,$(ROOTSYS)/lib
 
 OS	:= $(shell uname -s)
 ifeq ($(OS),Darwin)

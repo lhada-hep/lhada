@@ -26,7 +26,9 @@ struct TEParticle : public TLorentzVector
   TEParticle  operator+(const TEParticle& o) const;
   TEParticle  operator-(const TEParticle& o) const;
   TEParticle  operator*(double a) const;
-
+  inline      operator float() {return Pt(); }
+  inline      operator double() {return Pt(); }
+  
   double      operator()(std::string varname);
 
   void        operator()(std::string varname, double x);
@@ -44,7 +46,7 @@ struct TEParticle : public TLorentzVector
   
   static int s_UID;
 
-  ClassDef(TEParticle,0)
+  //ClassDef(TEParticle,0)
 };
 std::ostream& operator<<(std::ostream& os, const TEParticle& o);
 

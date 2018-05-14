@@ -44,13 +44,12 @@ TEParticle::TEParticle(int PID_,
 {
   SetPtEtaPhiM(pt, eta, phi, mass);
   
-  Value["PT"]    = Pt();
-  Value["Pt"]    = Pt();
-  Value["Eta"]   = Eta();
-  Value["|Eta|"] = fabs(Eta());
-  Value["Phi"]   = Phi();
-  Value["Mass"]  = M();
-  Value["M"]     = M();
+  Value["pt"]    = Pt();
+  Value["eta"]   = Eta();
+  Value["|eta|"] = fabs(Eta());
+  Value["phi"]   = Phi();
+  Value["mass"]  = M();
+  Value["m"]     = M();
 }
 
 
@@ -69,13 +68,12 @@ TEParticle::TEParticle(const TEParticle& p)
 {
   SetPtEtaPhiM(p.Pt(), p.Eta(), p.Phi(), p.M());
 
-  Value["PT"]    = Pt();
-  Value["Pt"]    = Pt();
-  Value["Eta"]   = Eta();
-  Value["|Eta|"] = fabs(Value["Eta"]);
-  Value["Phi"]   = Phi();
-  Value["Mass"]  = M();
-  Value["M"]     = M(); 
+  Value["pt"]    = Pt();
+  Value["eta"]   = Eta();
+  Value["|eta|"] = fabs(Value["Eta"]);
+  Value["phi"]   = Phi();
+  Value["mass"]  = M();
+  Value["m"]     = M(); 
 }
 
 
@@ -116,13 +114,12 @@ TEParticle TEParticle::operator+(const TEParticle& o) const
   q.Name = string(this->Name + "/" + o.Name);
   q.PID  = abs(this->PID);
 
-  q.Value["PT"]    = p.Pt();
-  q.Value["Pt"]    = p.Pt();
-  q.Value["Eta"]   = p.Eta();
-  q.Value["|Eta|"] = fabs(p.Eta());
-  q.Value["Phi"]   = p.Phi();
-  q.Value["Mass"]  = p.M();
-  q.Value["M"]     = p.M();
+  q.Value["pt"]    = p.Pt();
+  q.Value["eta"]   = p.Eta();
+  q.Value["|eta|"] = fabs(p.Eta());
+  q.Value["phi"]   = p.Phi();
+  q.Value["mass"]  = p.M();
+  q.Value["m"]     = p.M();
   
   return q;
 }
@@ -136,13 +133,12 @@ TEParticle TEParticle::operator-(const TEParticle& o) const
   q.Name = string(this->Name + "/" + o.Name);
   q.PID  = abs(this->PID);
 
-  q.Value["PT"]    = p.Pt();
-  q.Value["Pt"]    = p.Pt();
-  q.Value["Eta"]   = p.Eta();
-  q.Value["|Eta|"] = fabs(p.Eta());
-  q.Value["Phi"]   = p.Phi();
-  q.Value["Mass"]  = p.M();
-  q.Value["M"]     = p.M();
+  q.Value["pt"]    = p.Pt();
+  q.Value["eta"]   = p.Eta();
+  q.Value["|eta|"] = fabs(p.Eta());
+  q.Value["phi"]   = p.Phi();
+  q.Value["mass"]  = p.M();
+  q.Value["m"]     = p.M();
    
   return q;  
 }

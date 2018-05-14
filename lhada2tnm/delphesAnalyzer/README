@@ -1,4 +1,4 @@
-Created: Fri Feb  2 16:31:49 2018
+Created: Sun May 13 22:04:56 2018
 
     o First add lib and python directories to LD_LIBRARY_PATH and PYTHONPATH,
       respectively, by doing
@@ -18,16 +18,16 @@ Created: Fri Feb  2 16:31:49 2018
     containing a list of the ntuples to be analyzed, one filename per line.
     Then do
 
-      ./analyzer
+      ./delphesAnalyzer
 
     If you wish to specify a different file list, say datafile.list, do
 
-      ./analyzer datafile.list
+      ./delphesAnalyzer datafile.list
 
     If you wish to change the name of the root output file, say
     datahist.root, do
 
-       ./analyzer datafile.list datahist.root
+       ./delphesAnalyzer datafile.list datahist.root
 
 For details, please refer to the documentation at:
 

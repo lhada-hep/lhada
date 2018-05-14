@@ -9,9 +9,6 @@ from string import split, strip, atoi, atof, replace, joinfields
 from math import sqrt
 import ROOT
 #-----------------------------------------------------------------------------
-TNM_PATH=ROOT.gSystem.ExpandPathName("TNM_PATH")
-print TNM_PATH
-sys.exit()
 ROOT.gSystem.Load("$TNM_PATH/lib/libtnm")
 #-----------------------------------------------------------------------------
 # Hack to suppress harmless warning

@@ -1,0 +1,136 @@
+# arxiv:1704.03848, ATLAS monophoton
+
+info analysis
+# Details about experiment
+  experiment ATLAS
+  id EXOT-2016-32
+  publication Eur.Phys.J. C77 (2017) no.6, 393
+  sqrtS 13.0
+  lumi 36.1
+  arXiv 1704.03848
+  hepdata https://www.hepdata.net/record/ins1591328
+  doi 10.1140/epjc/s10052-017-4965-8
+
+
+# FUNCTIONS
+
+function METoverSqrtSumET
+  arg MET
+  arg scalarHT
+  code ATLASEXOT1704.0384_functions.h
+
+function dR
+  arg Eta1
+  arg Phi1
+  arg Eta2
+  arg Phi2
+  code ATLASSUSY1605.03814_functions.h
+
+function dPhi
+  arg Phi1
+  arg Phi2
+  code ATLASSUSY1605.03814_functions.h
+
+# Not used; just here to test translator
+function Meff
+  arg jets
+  arg MET
+  code ATLASSUSY1605.03814_functions.h
+  
+# OBJECT SELECTIONS
+
+object photons
+# Delphes photons
+  take Delphes_Photon
+  select PT > 10
+  select |Eta| < 2.37
+
+object tightphotons
+  take photons
+  select |eta| < 1.37
+  select |eta| > 1.52 and |eta| < 2.37  
+
+object electrons
+  take Delphes_Electron
+  select PT > 7
+  select |eta| < 2.47
+
+object muons
+  take Delphes_Muon
+  select PT > 6
+  select |eta| < 2.7
+
+object jets 
+# Delphes jets
+  take Delphes_Jet
+  select PT > 20
+  select |eta| < 4.5
+
+object cleanjets
+  take jets
+  apply dR(Eta, Phi, electrons.Eta, electrons.Phi) dRje
+  reject dRje < 0.2
+
+object cleanelectrons
+  take electrons
+  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRej
+  reject dRej < 0.4
+
+object cleanmuons
+  take muons
+  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRmuj
+  reject dRmuj < 0.4
+
+object MET
+  take Delphes_MissingET
+
+object jetsSR
+  take cleanjets
+  select PT > 30
+  apply dR(Eta, Phi, photons.Eta, photons.Phi) dRjp
+  reject dRjp < 0.4
+  apply dPhi(Phi, MET.Phi) dphijmet
+  reject dPhijmet < 0.4
+
+object scalarHT
+  # scalar sum of jets, electrons, photons, muons
+  take Delphes_scalarHT
+
+# VARIABLES
+
+variable METoverSqrtSumET
+  apply METoverSqrtSumET(MET, scalarHT)
+
+
+# EVENT SELECTION
+
+cut preselection
+# Pre-selection cuts
+  select tightphotons.size > 0
+  select tightphotons[0].PT > 150
+  select dPhi(tightphotons[0].Phi, MET.Phi) > 0.4
+  select METoverSqrtSumET > 8.5
+  reject jetsSR.size > 1
+  select cleanmuons.size == 0
+  select cleanelectrons.size == 0
+
+cut SRI1
+  select preselection
+  select MET.PT > 150
+
+cut SRI2
+  select preselection
+  select MET.PT > 225
+
+cut SRI3
+  select preselection
+  select MET.PT > 300
+
+cut SRE1
+  select preselection
+  select MET.PT > 150 and MET.PT < 225
+
+cut SRE2
+  select preselection
+  select MET.PT > 225 and MET.PT < 300
+
