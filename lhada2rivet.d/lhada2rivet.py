@@ -17,9 +17,12 @@ indent = ' ' * 2
 block_start = re.compile(r'object|collection|variable|cut|region|function|table')
 re_indented = re.compile(r'^\s')
 
+nhooks = 2
+
 analysis_code_template = """// -*- C++ -*-
 #include <iostream>
 #include "Rivet/Analysis.hh"
+#include "Rivet/AnalysisHandler.hh"
 #include "Rivet/Tools/Cutflow.hh"
 
 %INCLUDE_BLOCK%
@@ -52,6 +55,9 @@ namespace Rivet {
       %PROJECTION_INIT%
 
       %COUNTER_INIT%
+
+      %USER_CODE_1%
+
     }
 
     %OBJECT_CUTS%
@@ -67,6 +73,8 @@ namespace Rivet {
 
        %WEIGHT%
 
+       %USER_CODE_2%
+
        %CUTS%
 
        %COUNTER_FILL%
@@ -76,6 +84,19 @@ namespace Rivet {
 
     /// Normalise histograms etc., after the run
     void finalize() {
+
+       //Event count in the cut flows is normalized
+       //such that in case of a sample whose only 
+       //the weight sign vary, events with a positive
+       //weight are counted as +1 and events with a negative
+       //weight as -1.
+       double fact = sqrt(numEvents() / handler().sumW2());
+       if(isnormal(fact)){
+          for(auto& x: cutflows.cfs){
+            x.scale(fact);
+          }
+       }
+
        std::cout << "Analsyis cut flow:\\n"
                  << "-----------------\\n\\n"
                  << cutflows << "\\n";
@@ -154,7 +175,8 @@ class FuncDef:
 class CutNode:
     def __init__(self, name):
         self.name = name
-        self._dependencies = [] #list of cut blocks this block depends on
+        self._dependencies = [] #list of cuts that precede this cut in the different cut flows. Only 0 or 1 element is supported
+        self._branches     = [] #list of cuts that follows this one in the different cut flows
         self.endpoint = True    #True if no other cut block depends on this one
         self.cuts = []          #List of selection conditions
         self.cutflows = []      #list of cut flows (identified by their endpoint cut) this cut is in.
@@ -162,22 +184,26 @@ class CutNode:
     #enddef __init__
     def add_dependency(self, c):
         if len(self._dependencies) > 0:
-            raise Runtime("The cut block %s violates the rule requiring that a cut block depends on maximum another cut block." % name)
+            raise RuntimeError("The cut block %s violates the rule requiring that a cut block depends on maximum another cut block." % self.name)
         c.endpoint = False
         self._dependencies.append(c)
     #enddef add_dependency
     def add_dependencies(self, cc):
         for c in cc:
             self.add_dependency(c)
+        cc[0]._branches.append(self)
         #next c
     #enddef add_dependencies
     def dependencies(self):
         return self._dependencies
     #enddef dependencies
+    def branches(self):
+        return self._branches
+    #enddef branches
 #end class CutNode
 
 include_block = ""
-includes = []
+includes = [ "<cmath>" ]
 proj_init = ""
 counter_init = ""
 obj_def = ""
@@ -214,6 +240,9 @@ types = { particles: "Particles"}
 #list of defined cuts with their dependencu on other cut block
 # key: cut block name, value: CutNode object
 cutblocks = {}
+
+#Root node of the selection tree
+rootNode = CutNode("root")
 
 # List of cutflows.
 # key: cut flow name, [cut list]
@@ -353,7 +382,7 @@ declare(SmearedMET(%TRUTH_MET%, MET_SMEAR_ATLAS_RUN2), "%RECO_MET%");
 ''',  { "%CALO_FS%": caloFS, \
         "%TRUTH_MET%": truthMET, \
         "%RECO_MET%": object})
-    obj_def += multi_replace('''%TYPE_DECL%%OBJECT% = - toFourMomentum(applyProjection<SmearedMET>(event, "%RECO_MET%").vectorMPT());
+    obj_def += multi_replace('''%TYPE_DECL%%OBJECT% = toFourMomentum(applyProjection<SmearedMET>(event, "%RECO_MET%").vectorMPT());
 ''', { "%OBJECT%": object, \
        "%RECO_MET%": object, \
        "%TYPE_DECL%": type_decl})
@@ -1011,7 +1040,8 @@ def gen_collection_filter_code(coltype, incol, cuts, outcol, localVar):
         expr += op + subst_expr
         op = "\n" + indent*2 + "&& ";
     #next c
-    code = multi_replace('''%TYPE_DECL%for(const auto& p: %INCOL%){
+    code = multi_replace('''%OUTCOL%.clear();
+%TYPE_DECL%for(const auto& p: %INCOL%){
 %_%if(%EXPR%){
 %_%%_%%OUTCOL%.push_back(p);
 %_%}
@@ -1130,9 +1160,10 @@ def parse_object_block():
             if not m:
                 raise RuntimeError("Syntax error in line %d of file %s: select statement should follow the format 'select variable operator value." % (lhadafile.current_line, lhadafile.name))
             #endif
-            if toks[0] == 'select': #inverted cut
+            if toks[0] == 'reject': #inverted cut
                 #FIXME add code to simplify the expression ?
-                cuts.append("!(%s)" % m.groups()[1])
+#                cuts.append("!(%s)" % m.groups()[1])
+                cuts.append(invert_cond(m.groups()[1]))
             else:
                 cuts.append(m.groups()[1])
             #endif            
@@ -1382,12 +1413,15 @@ def parse_cut_block():
         toks = l.split()
         if toks[0] in ['select', 'reject']:
             (expr, extra_dependencies) = parse_cut_line(" ".join(toks[1:]), "")
-            cutblocks[cut_name].add_dependencies(extra_dependencies)
-            if toks[0] == 'select':
-                cutblocks[cut_name].cuts.append(expr)
-            elif toks[0] == 'reject':
-                cutblocks[cut_name].cuts.append(expr)
-            #endif
+            if extra_dependencies:
+                cutblocks[cut_name].add_dependencies(extra_dependencies)
+            else:
+                if toks[0] == 'select':
+                    cutblocks[cut_name].cuts.append(expr)
+                elif toks[0] == 'reject':
+                    cutblocks[cut_name].cuts.append(invert_cond(expr))
+                #endif tok[0]...
+            #endif dependencies
         else:
             raise RuntimeError("Syntax error in line %d of file %s. Every line of the body of a cut block should start with the keyword 'select'.\n\t%s" % (lhadafile.current_line, lhadafile.name, l))
         #endif
@@ -1396,10 +1430,11 @@ def parse_cut_block():
 
 def invert_cond(expr):
     '''Invert a mathematical condition expression'''
-    r = re.compile(r'([^()+-^*/&|=<>]+)(=|==|!=|<|>|<=|>=)([^()+-^*/&|=<>]+)')
+    r = re.compile(r'([^*/+-=<>|&^]+)(=|==|!=|<|>|<=|>=)([^*/+-=<>|&^]+)')
     ops = (('==','!='), ('<', '>='), ('<=', '>'))
     newop = None
     if r.match(expr):
+        print '2>', r.groups
         l, op, r = r.groups()
         if op == '=':
             op = '=='
@@ -1517,10 +1552,10 @@ def parse_cut_line(l, pref):
             r += "["
             continue
         if tok == ']':
-            r += " - 1]"
+            r += "]"
             continue
         r += tok
-        #TODO: handle function named arguments
+    #TODO: handle function named arguments
     return (r.rstrip(), dependencies)
 
 #under dev# def gen_histo_code():
@@ -1618,7 +1653,13 @@ def gen_cutflow_decl_code():
     cfs_init = ""
     sep = ""
     for cf, cl in cutflows.iteritems():
-        cfs_init += 'cutflows.addCutflow("%s", {%s});\n' % (cf, ", ".join([ '"%s"' % x.name for x in cl]))
+        cutnames = []
+        for cb in cl:
+            for c in cb.cuts:
+                cutnames.append(c)
+            #next c
+        #next cb
+        cfs_init += 'cutflows.addCutflow("%s", {%s});\n\n' % (cf, (",\n" + ' '* 28).join([ '"%s"' % x for x in cutnames]))
     #next c
     cfs_decl = '''///Tracks the event counts after each cut
 Cutflows cutflows;'''
@@ -1648,7 +1689,7 @@ def gen_cut_func_code():
 %I%bool r = true;
 ''', {"%I%": indent, \
       "%FUNC%": func_name, \
-      "%CUTFLOW_LIST%": ", ".join(["k%s" % x.name for x in cutblock.cutflows])})
+      "%CUTFLOW_LIST%": ", ".join(["k%s" % x.name.capitalize() for x in cutblock.cutflows])})
             else: #code already generated
                 if cutblock.order != cut_order:
                     raise RuntimeError("Error detected in the cut flows. The numbers of cuts preceeding the cuts of cut block %s dependes on the cut flow, while it is expected that Lhada17 rules prevent this situation." % cutblock.name)
@@ -1696,8 +1737,10 @@ def gen_code():
     #Inplement the vector3 -> FourMometum cast operator
     #if it is used:
     if vector3ToFourMometum:
+        insert_include("Rivet/Math/Vector3.hh")
+        insert_include("Rivet/Math/Vector4.hh")
         cast_op = '''static FourMomentum toFourMomentum(const Vector3& v){
-%sreturn FourMomentum(v.x(), v.y(), v.z(), v.mod());
+%sreturn FourMomentum(v.mod(), v.x(), v.y(), v.z());
 }
 ''' % indent
         func_codes.insert(0, cast_op)
@@ -1709,6 +1752,8 @@ def gen_code():
 
     func_codes.append(gen_cut_func_code())
 
+    cut_flow_code = gen_cut_call_code()
+    
     # we substitute the code block in two steps in
     # order to check if the instance 'particles' is used
     # before generating the code that creates it.
@@ -1726,7 +1771,7 @@ def gen_code():
                  "%OBJECT_CUTS%": "\n\n".join(obj_cuts), 
                  "%FUNCTION_DEFINITIONS%": "\n\n".join(func_codes),
                  "%WEIGHT%" : "",
-                 "%CUTS%": gen_cut_call_code(),
+                 "%CUTS%": cut_flow_code,
                  "%COUNTER_FILL%":""
     }
 
@@ -1752,7 +1797,11 @@ def gen_code():
                  "%OBJECT_DECLARATION%":  obj_decl}
 
     code = block_replace(code, subst_map)
-    
+
+    for i in range(1, nhooks + 1):
+        filename = vars(args)["user_code_%d" % i]
+        code = add_user_code(i, filename, code)
+    #next c
         
     with open(analysis_name + ".cc", "w") as f:
         f.write(code + "\n")
@@ -1770,8 +1819,10 @@ def main():
 
     parser.add_argument('analysis_name', action='store', default=None,
                         help='Analysis name')
-    
 
+    for i in range(1,nhooks + 1):
+        parser.add_argument('-%d' % i, '--user-code-%d' % i, action='store', default=None, help='Used code to include in position %d' % i)
+    
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Activate verbose mode')
 
     parser.add_argument('-d', '--debug', action='store_true', default = False, help='Activate debug mode.')
@@ -1788,7 +1839,7 @@ def main():
 
 def build_cutflows():
     '''Build the cutflow. To be called once the CutNode tree is built. This function modified the CutNode's stored in cutblocks.'''
-    global cutblocks, cutflows
+    global cutblocks, cutflows, rootNode
     for v in cutblocks.values():
         if v.endpoint:
             cut_sequence = []
@@ -1804,22 +1855,60 @@ def build_cutflows():
             #endwhile
         #endif
     #next v
+    for v in cutblocks.values():
+        #Orphan branches inherit from "root" (= all events)
+        if len(v.dependencies()) == 0:
+            v.add_dependencies([rootNode])
+        #endif
+    #next v
 
+def add_user_code(pos, src, dst):
+    if src:
+        to_insert = open(src, 'r').read()
+        return block_replace(dst, {'%%USER_CODE_%d%%' % pos: to_insert})
+    else:
+        return block_replace(dst, {'%%USER_CODE_%d%%' % pos: ""})
+#end
+    
 
 def gen_cut_call_code():
+    global rootNode, cutblocks, indent
     code = '''double w = event.weight();
-cutflows.fillinit();
+cutflows.fillinit(w);
 '''
-    for cf in cutflows:
-        code += "cut_%s(w);\n" % cf
-    code += "\n"
+    depth = -1
+    stack = [(rootNode, depth)]
+    while len(stack) > 0:
+        prev_depth = depth
+        cutblock, depth = stack.pop()
+        branches = cutblock.branches()
+        
+        if depth < prev_depth and depth >= 0:
+            code += "%s}\n" % (indent * depth)
+        #endif
+        
+        if len(branches) == 0:
+            if cutblock != rootNode:
+                code += "%scut_%s(w);\n" % ((indent * depth), cutblock.name)
+        else:
+            if cutblock != rootNode:
+                code += "%sif(cut_%s(w)){\n" % ((indent * depth), cutblock.name)
+            #endif
+            depth += 1
+            stack.extend([(x,depth) for x in reversed(branches)])
+        #endif
+    #endwhile
+    while depth > 0:
+        depth -= 1
+        code += "%s}\n" % (indent * depth)
+    #endwhile
     return code
 #enddef
 
 def gen_cutflowfill_func_code():
     '''Generate c++ code for the fillCutFlows function'''
     return multi_replace('''bool fillCutFlows(const std::vector<int>& cfs, int icut, bool passed, double w){
-%I%for(auto& icf: cfs) cutflows[icf].fill(icut, passed, w);
+%I%for(auto& icf: cfs) cutflows[icf].fill(icut + 1, passed, w);
 %I%return passed;
 }\n\n''', { "%I%": indent})
     
