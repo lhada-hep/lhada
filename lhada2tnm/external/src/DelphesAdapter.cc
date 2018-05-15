@@ -40,6 +40,8 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name,
 				 ev.Muon_Phi[c],
 				 0));
 	  p.back().Value["charge"] = ev.Muon_Charge[c];
+	  p.back().Value["isolationvar"] = ev.Muon_IsolationVar[c];
+	  p.back().Value["isolationvarrhocorr"] = ev.Muon_IsolationVarRhoCorr[c];
 	}
     }
   else if ( key.Contains("electron") )
@@ -51,7 +53,9 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name,
 				 ev.Electron_Eta[c],
 				 ev.Electron_Phi[c],
 				 0));
-	  p.back().Value["charge"] = ev.Electron_Charge[c];	  
+	  p.back().Value["charge"] = ev.Electron_Charge[c];
+	  p.back().Value["isolationvar"] = ev.Electron_IsolationVar[c];	  
+	  p.back().Value["isolationvarrhocorr"] = ev.Electron_IsolationVarRhoCorr[c];	  
 	}      
     }
   else if ( key.Contains("photon") )
@@ -64,6 +68,8 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name,
 				 ev.Photon_Phi[c],
 				 0));
 	  p.back().Value["charge"] = 0;
+	  p.back().Value["isolationvar"] = ev.Photon_IsolationVar[c];	  
+	  p.back().Value["isolationvarrhocorr"] = ev.Photon_IsolationVarRhoCorr[c];	  
 	}      
     }  
   else if ( key.Contains("jet") )

@@ -133,3 +133,15 @@ cut SRE1
 cut SRE2
   select preselection
   select MET.PT > 225 and MET.PT < 300  
+
+cut lhprocsel  
+# Reverse order selection for comparison to LH17 proceedings
+  select MET.PT > 150
+  select tightphotons.size > 0
+  select tightphotons[0].PT > 150
+  select dPhi(tightphotons[0].Phi, MET.Phi) > 0.4
+  select METoverSqrtSumET > 8.5
+  reject jetsSR.size > 1
+  select cleanmuons.size == 0
+  select cleanelectrons.size == 0
+  

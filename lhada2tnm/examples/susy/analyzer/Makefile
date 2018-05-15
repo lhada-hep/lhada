@@ -1,13 +1,13 @@
 #----------------------------------------------------------------------------
 # Description: Makefile to build analyzers
-# Created:     Mon May 14 09:55:54 2018 by mkanalyzer.py
+# Created:     Tue May 15 14:10:05 2018 by mkanalyzer.py
 # Author:      Shakespeare's ghost
 #----------------------------------------------------------------------------
 ifndef ROOTSYS
 $(error *** Please set up Root)
 endif
 
-name    := delphesAnalyzer
+name    := analyzer
 
 # Sub-directories
 srcdir	:= src

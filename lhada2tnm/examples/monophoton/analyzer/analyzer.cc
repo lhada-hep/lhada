@@ -1,8 +1,8 @@
 //---------------------------------------------------------------------------
-// File:        delphesAnalyzer.cc
+// File:        analyzer.cc
 // Description: Analyzer for LHADA analysis:
 //
-// LHADA file: ../doc/ATLASEXOT1704.0384_Delphes.lhada
+// LHADA file: ../../../doc/ATLASEXOT1704.0384_Delphes.lhada
 // info block
 //	experiment  	ATLAS
 //	id          	EXOT-2016-32
@@ -13,7 +13,7 @@
 //	hepdata     	https://www.hepdata.net/record/ins1591328
 //	doi         	10.1140/epjc/s10052-017-4965-8
 //
-// Created:     Tue May 15 03:16:45 2018 by lhada2tnm.py
+// Created:     Tue May 15 14:49:23 2018 by lhada2tnm.py
 //----------------------------------------------------------------------------
 #include <algorithm>
 #include "tnm.h"
@@ -201,7 +201,7 @@ struct object_tightphotons_s : public lhadaThing
       {
         TEParticle& p = photons[c];
         if ( !((p("|eta|") < 1.37) ||
-	 ((p("|eta|") > 1.52) && (p("|eta|") < 2.37))) ) continue;
+	 ( (p("|eta|") > 1.52) && (p("|eta|") < 2.37) )) ) continue;
         tightphotons.push_back(p);
       }
   };
@@ -326,6 +326,103 @@ struct object_cleanmuons_s : public lhadaThing
 
 //----------------------------------------------------------------------------
 // selections
+struct cut_lhprocsel_s : public lhadaThing
+{
+  std::string name;
+  double total;
+  double dtotal;
+  TH1F*  hcount;
+  bool   done;
+  bool   result;
+  double weight;
+
+  int    ncuts;
+
+  cut_lhprocsel_s()
+    : lhadaThing(),
+      name("lhprocsel"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1),
+      ncuts(7)
+  {
+    hcount = new TH1F("cutflow_lhprocsel", "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
+    hcount->Sumw2();
+
+    hcount->Fill("none", 0);
+    hcount->Fill("MET.PT > 150", 0);
+    hcount->Fill("tightphotons.size > 0", 0);
+    hcount->Fill("tightphotons[0].PT > 150", 0);
+    hcount->Fill("dPhi(tightphotons[0].Phi, MET.Phi) > 0.4", 0);
+    hcount->Fill("METoverSqrtSumET > 8.5", 0);
+    hcount->Fill("cleanmuons.size == 0", 0);
+    hcount->Fill("cleanelectrons.size == 0", 0);
+  }
+
+  ~cut_lhprocsel_s() {}
+
+  void summary()
+  {
+    cout << name << endl;
+    double gtotal = hcount->GetBinContent(1);
+    for(int c=0; c <= ncuts; c++)
+      {
+        double value(hcount->GetBinContent(c+1));
+        double error(hcount->GetBinError(c+1));
+        double efficiency=0;
+        if ( gtotal > 0 ) efficiency = value/gtotal;
+        printf(" %2d %-45s: %9.2f +/- %5.1f %6.3f\n",
+               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+      }
+    cout << endl;
+  }
+  void count(string c)		{ hcount->Fill(c.c_str(), weight); }
+  void write(outputFile& out)	{ out.file_->cd(); hcount->Write(); }
+  void reset()			{ done = false; result = false; }
+  bool operator()()		{ return apply(); }
+
+  bool apply()
+  {
+    if ( done ) return result;
+    done   = true;
+    result = false;
+    count("none");
+
+    if ( !(MET("pt") > 150) ) return false;
+    count("MET.PT > 150");
+
+    if ( !(tightphotons.size() > 0) ) return false;
+    count("tightphotons.size > 0");
+
+    if ( !(tightphotons[0]("pt") > 150) ) return false;
+    count("tightphotons[0].PT > 150");
+
+    if ( !(_dPhi(tightphotons[0]("phi"), MET("phi")) > 0.4) ) return false;
+    count("dPhi(tightphotons[0].Phi, MET.Phi) > 0.4");
+
+    if ( !(METoverSqrtSumET_ > 8.5) ) return false;
+    count("METoverSqrtSumET > 8.5");
+
+    if ( !(cleanmuons.size() == 0) ) return false;
+    count("cleanmuons.size == 0");
+
+    if ( !(cleanelectrons.size() == 0) ) return false;
+    count("cleanelectrons.size == 0");
+
+    total  += weight;
+    dtotal += weight * weight;
+
+    // NB: remember to update result cache
+    result  = true;
+    return true;
+  }
+} cut_lhprocsel;
+
 struct cut_preselection_s : public lhadaThing
 {
   std::string name;
@@ -336,6 +433,8 @@ struct cut_preselection_s : public lhadaThing
   bool   result;
   double weight;
 
+  int    ncuts;
+
   cut_preselection_s()
     : lhadaThing(),
       name("preselection"),
@@ -344,17 +443,19 @@ struct cut_preselection_s : public lhadaThing
       hcount(0),
       done(false),
       result(false),
-      weight(1)
+      weight(1),
+      ncuts(6)
   {
-    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount = new TH1F("cutflow_preselection", "", 1, 0, 1);
     hcount->SetCanExtend(1);
     hcount->SetStats(0);
+    hcount->Sumw2();
 
     hcount->Fill("none", 0);
     hcount->Fill("tightphotons.size > 0", 0);
     hcount->Fill("tightphotons[0].PT > 150", 0);
-    hcount->Fill("_dPhi(tightphotons[0].Phi, MET.Phi) > 0.4", 0);
-    hcount->Fill("METoverSqrtSumET_ > 8.5", 0);
+    hcount->Fill("dPhi(tightphotons[0].Phi, MET.Phi) > 0.4", 0);
+    hcount->Fill("METoverSqrtSumET > 8.5", 0);
     hcount->Fill("cleanmuons.size == 0", 0);
     hcount->Fill("cleanelectrons.size == 0", 0);
   }
@@ -363,41 +464,53 @@ struct cut_preselection_s : public lhadaThing
 
   void summary()
   {
-    printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), total, sqrt(dtotal));
+    cout << name << endl;
+    double gtotal = hcount->GetBinContent(1);
+    for(int c=0; c <= ncuts; c++)
+      {
+        double value(hcount->GetBinContent(c+1));
+        double error(hcount->GetBinError(c+1));
+        double efficiency=0;
+        if ( gtotal > 0 ) efficiency = value/gtotal;
+        printf(" %2d %-45s: %9.2f +/- %5.1f %6.3f\n",
+               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+      }
+    cout << endl;
   }
-  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
-  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
-  void reset()				{ done = false; result = false; }
-  bool operator()()	{ return apply(); }
+  void count(string c)		{ hcount->Fill(c.c_str(), weight); }
+  void write(outputFile& out)	{ out.file_->cd(); hcount->Write(); }
+  void reset()			{ done = false; result = false; }
+  bool operator()()		{ return apply(); }
 
   bool apply()
   {
     if ( done ) return result;
     done   = true;
     result = false;
-    count("none", weight);
+    count("none");
 
     if ( !(tightphotons.size() > 0) ) return false;
-    count("tightphotons.size > 0", weight);
+    count("tightphotons.size > 0");
 
     if ( !(tightphotons[0]("pt") > 150) ) return false;
-    count("tightphotons[0].PT > 150", weight);
+    count("tightphotons[0].PT > 150");
 
     if ( !(_dPhi(tightphotons[0]("phi"), MET("phi")) > 0.4) ) return false;
-    count("_dPhi(tightphotons[0].Phi, MET.Phi) > 0.4", weight);
+    count("dPhi(tightphotons[0].Phi, MET.Phi) > 0.4");
 
     if ( !(METoverSqrtSumET_ > 8.5) ) return false;
-    count("METoverSqrtSumET_ > 8.5", weight);
+    count("METoverSqrtSumET > 8.5");
 
     if ( !(cleanmuons.size() == 0) ) return false;
-    count("cleanmuons.size == 0", weight);
+    count("cleanmuons.size == 0");
 
     if ( !(cleanelectrons.size() == 0) ) return false;
-    count("cleanelectrons.size == 0", weight);
+    count("cleanelectrons.size == 0");
 
     total  += weight;
     dtotal += weight * weight;
+
+    // NB: remember to update result cache
     result  = true;
     return true;
   }
@@ -413,6 +526,8 @@ struct cut_SRE2_s : public lhadaThing
   bool   result;
   double weight;
 
+  int    ncuts;
+
   cut_SRE2_s()
     : lhadaThing(),
       name("SRE2"),
@@ -421,11 +536,13 @@ struct cut_SRE2_s : public lhadaThing
       hcount(0),
       done(false),
       result(false),
-      weight(1)
+      weight(1),
+      ncuts(2)
   {
-    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount = new TH1F("cutflow_SRE2", "", 1, 0, 1);
     hcount->SetCanExtend(1);
     hcount->SetStats(0);
+    hcount->Sumw2();
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
@@ -436,29 +553,41 @@ struct cut_SRE2_s : public lhadaThing
 
   void summary()
   {
-    printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), total, sqrt(dtotal));
+    cout << name << endl;
+    double gtotal = hcount->GetBinContent(1);
+    for(int c=0; c <= ncuts; c++)
+      {
+        double value(hcount->GetBinContent(c+1));
+        double error(hcount->GetBinError(c+1));
+        double efficiency=0;
+        if ( gtotal > 0 ) efficiency = value/gtotal;
+        printf(" %2d %-45s: %9.2f +/- %5.1f %6.3f\n",
+               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+      }
+    cout << endl;
   }
-  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
-  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
-  void reset()				{ done = false; result = false; }
-  bool operator()()	{ return apply(); }
+  void count(string c)		{ hcount->Fill(c.c_str(), weight); }
+  void write(outputFile& out)	{ out.file_->cd(); hcount->Write(); }
+  void reset()			{ done = false; result = false; }
+  bool operator()()		{ return apply(); }
 
   bool apply()
   {
     if ( done ) return result;
     done   = true;
     result = false;
-    count("none", weight);
+    count("none");
 
     if ( !(cut_preselection()) ) return false;
-    count("preselection", weight);
+    count("preselection");
 
     if ( !(MET("pt") > 225 && MET("pt") < 300) ) return false;
-    count("MET.PT > 225 and MET.PT < 300", weight);
+    count("MET.PT > 225 and MET.PT < 300");
 
     total  += weight;
     dtotal += weight * weight;
+
+    // NB: remember to update result cache
     result  = true;
     return true;
   }
@@ -474,6 +603,8 @@ struct cut_SRI1_s : public lhadaThing
   bool   result;
   double weight;
 
+  int    ncuts;
+
   cut_SRI1_s()
     : lhadaThing(),
       name("SRI1"),
@@ -482,11 +613,13 @@ struct cut_SRI1_s : public lhadaThing
       hcount(0),
       done(false),
       result(false),
-      weight(1)
+      weight(1),
+      ncuts(2)
   {
-    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount = new TH1F("cutflow_SRI1", "", 1, 0, 1);
     hcount->SetCanExtend(1);
     hcount->SetStats(0);
+    hcount->Sumw2();
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
@@ -497,29 +630,41 @@ struct cut_SRI1_s : public lhadaThing
 
   void summary()
   {
-    printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), total, sqrt(dtotal));
+    cout << name << endl;
+    double gtotal = hcount->GetBinContent(1);
+    for(int c=0; c <= ncuts; c++)
+      {
+        double value(hcount->GetBinContent(c+1));
+        double error(hcount->GetBinError(c+1));
+        double efficiency=0;
+        if ( gtotal > 0 ) efficiency = value/gtotal;
+        printf(" %2d %-45s: %9.2f +/- %5.1f %6.3f\n",
+               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+      }
+    cout << endl;
   }
-  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
-  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
-  void reset()				{ done = false; result = false; }
-  bool operator()()	{ return apply(); }
+  void count(string c)		{ hcount->Fill(c.c_str(), weight); }
+  void write(outputFile& out)	{ out.file_->cd(); hcount->Write(); }
+  void reset()			{ done = false; result = false; }
+  bool operator()()		{ return apply(); }
 
   bool apply()
   {
     if ( done ) return result;
     done   = true;
     result = false;
-    count("none", weight);
+    count("none");
 
     if ( !(cut_preselection()) ) return false;
-    count("preselection", weight);
+    count("preselection");
 
     if ( !(MET("pt") > 150) ) return false;
-    count("MET.PT > 150", weight);
+    count("MET.PT > 150");
 
     total  += weight;
     dtotal += weight * weight;
+
+    // NB: remember to update result cache
     result  = true;
     return true;
   }
@@ -535,6 +680,8 @@ struct cut_SRI2_s : public lhadaThing
   bool   result;
   double weight;
 
+  int    ncuts;
+
   cut_SRI2_s()
     : lhadaThing(),
       name("SRI2"),
@@ -543,11 +690,13 @@ struct cut_SRI2_s : public lhadaThing
       hcount(0),
       done(false),
       result(false),
-      weight(1)
+      weight(1),
+      ncuts(2)
   {
-    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount = new TH1F("cutflow_SRI2", "", 1, 0, 1);
     hcount->SetCanExtend(1);
     hcount->SetStats(0);
+    hcount->Sumw2();
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
@@ -558,29 +707,41 @@ struct cut_SRI2_s : public lhadaThing
 
   void summary()
   {
-    printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), total, sqrt(dtotal));
+    cout << name << endl;
+    double gtotal = hcount->GetBinContent(1);
+    for(int c=0; c <= ncuts; c++)
+      {
+        double value(hcount->GetBinContent(c+1));
+        double error(hcount->GetBinError(c+1));
+        double efficiency=0;
+        if ( gtotal > 0 ) efficiency = value/gtotal;
+        printf(" %2d %-45s: %9.2f +/- %5.1f %6.3f\n",
+               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+      }
+    cout << endl;
   }
-  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
-  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
-  void reset()				{ done = false; result = false; }
-  bool operator()()	{ return apply(); }
+  void count(string c)		{ hcount->Fill(c.c_str(), weight); }
+  void write(outputFile& out)	{ out.file_->cd(); hcount->Write(); }
+  void reset()			{ done = false; result = false; }
+  bool operator()()		{ return apply(); }
 
   bool apply()
   {
     if ( done ) return result;
     done   = true;
     result = false;
-    count("none", weight);
+    count("none");
 
     if ( !(cut_preselection()) ) return false;
-    count("preselection", weight);
+    count("preselection");
 
     if ( !(MET("pt") > 225) ) return false;
-    count("MET.PT > 225", weight);
+    count("MET.PT > 225");
 
     total  += weight;
     dtotal += weight * weight;
+
+    // NB: remember to update result cache
     result  = true;
     return true;
   }
@@ -596,6 +757,8 @@ struct cut_SRI3_s : public lhadaThing
   bool   result;
   double weight;
 
+  int    ncuts;
+
   cut_SRI3_s()
     : lhadaThing(),
       name("SRI3"),
@@ -604,11 +767,13 @@ struct cut_SRI3_s : public lhadaThing
       hcount(0),
       done(false),
       result(false),
-      weight(1)
+      weight(1),
+      ncuts(2)
   {
-    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount = new TH1F("cutflow_SRI3", "", 1, 0, 1);
     hcount->SetCanExtend(1);
     hcount->SetStats(0);
+    hcount->Sumw2();
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
@@ -619,29 +784,41 @@ struct cut_SRI3_s : public lhadaThing
 
   void summary()
   {
-    printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), total, sqrt(dtotal));
+    cout << name << endl;
+    double gtotal = hcount->GetBinContent(1);
+    for(int c=0; c <= ncuts; c++)
+      {
+        double value(hcount->GetBinContent(c+1));
+        double error(hcount->GetBinError(c+1));
+        double efficiency=0;
+        if ( gtotal > 0 ) efficiency = value/gtotal;
+        printf(" %2d %-45s: %9.2f +/- %5.1f %6.3f\n",
+               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+      }
+    cout << endl;
   }
-  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
-  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
-  void reset()				{ done = false; result = false; }
-  bool operator()()	{ return apply(); }
+  void count(string c)		{ hcount->Fill(c.c_str(), weight); }
+  void write(outputFile& out)	{ out.file_->cd(); hcount->Write(); }
+  void reset()			{ done = false; result = false; }
+  bool operator()()		{ return apply(); }
 
   bool apply()
   {
     if ( done ) return result;
     done   = true;
     result = false;
-    count("none", weight);
+    count("none");
 
     if ( !(cut_preselection()) ) return false;
-    count("preselection", weight);
+    count("preselection");
 
     if ( !(MET("pt") > 300) ) return false;
-    count("MET.PT > 300", weight);
+    count("MET.PT > 300");
 
     total  += weight;
     dtotal += weight * weight;
+
+    // NB: remember to update result cache
     result  = true;
     return true;
   }
@@ -657,6 +834,8 @@ struct cut_SRE1_s : public lhadaThing
   bool   result;
   double weight;
 
+  int    ncuts;
+
   cut_SRE1_s()
     : lhadaThing(),
       name("SRE1"),
@@ -665,11 +844,13 @@ struct cut_SRE1_s : public lhadaThing
       hcount(0),
       done(false),
       result(false),
-      weight(1)
+      weight(1),
+      ncuts(2)
   {
-    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount = new TH1F("cutflow_SRE1", "", 1, 0, 1);
     hcount->SetCanExtend(1);
     hcount->SetStats(0);
+    hcount->Sumw2();
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
@@ -680,29 +861,41 @@ struct cut_SRE1_s : public lhadaThing
 
   void summary()
   {
-    printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), total, sqrt(dtotal));
+    cout << name << endl;
+    double gtotal = hcount->GetBinContent(1);
+    for(int c=0; c <= ncuts; c++)
+      {
+        double value(hcount->GetBinContent(c+1));
+        double error(hcount->GetBinError(c+1));
+        double efficiency=0;
+        if ( gtotal > 0 ) efficiency = value/gtotal;
+        printf(" %2d %-45s: %9.2f +/- %5.1f %6.3f\n",
+               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+      }
+    cout << endl;
   }
-  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
-  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
-  void reset()				{ done = false; result = false; }
-  bool operator()()	{ return apply(); }
+  void count(string c)		{ hcount->Fill(c.c_str(), weight); }
+  void write(outputFile& out)	{ out.file_->cd(); hcount->Write(); }
+  void reset()			{ done = false; result = false; }
+  bool operator()()		{ return apply(); }
 
   bool apply()
   {
     if ( done ) return result;
     done   = true;
     result = false;
-    count("none", weight);
+    count("none");
 
     if ( !(cut_preselection()) ) return false;
-    count("preselection", weight);
+    count("preselection");
 
     if ( !(MET("pt") > 150 && MET("pt") < 225) ) return false;
-    count("MET.PT > 150 and MET.PT < 225", weight);
+    count("MET.PT > 150 and MET.PT < 225");
 
     total  += weight;
     dtotal += weight * weight;
+
+    // NB: remember to update result cache
     result  = true;
     return true;
   }
@@ -714,7 +907,7 @@ int main(int argc, char** argv)
 {
   // If you want canvases to be visible during program execution, just
   // uncomment the line below
-  //TApplication app("delphesAnalyzer", &argc, argv);
+  //TApplication app("analyzer", &argc, argv);
 
   // Get command line arguments
   commandLine cl(argc, argv);
@@ -766,6 +959,7 @@ int main(int argc, char** argv)
 
   // cache pointers to cuts
   vector<lhadaThing*> cuts;
+  cuts.push_back(&cut_lhprocsel);
   cuts.push_back(&cut_preselection);
   cuts.push_back(&cut_SRE2);
   cuts.push_back(&cut_SRI1);
@@ -795,7 +989,7 @@ int main(int argc, char** argv)
       for(size_t c=0; c < objects.size(); c++) objects[c]->create();
 
       // compute event level variables
-      METoverSqrtSumET_	= METoverSqrtSumET(MET, scalarHT);
+      METoverSqrtSumET_	= _METoverSqrtSumET(MET, scalarHT);
 
       // apply event level selections
       for(size_t c=0; c < cuts.size(); c++)
@@ -806,7 +1000,7 @@ int main(int argc, char** argv)
     }
 
   // count summary
-  std::cout << "event counts" << std::endl;
+  cout << "Summary" << endl << endl;
   for(size_t c=0; c < cuts.size(); c++)
     {
       cuts[c]->summary();

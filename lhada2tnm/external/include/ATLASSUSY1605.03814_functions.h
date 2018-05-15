@@ -17,7 +17,7 @@ double dphijNjle3METmin(std::vector<TLorentzVector>& jets, TLorentzVector& MET) 
   if (jets.size() < 2)
     return 0;
   int njets = 3;
-  if (jets.size() == (size_t)3) njets = 2;
+  if (jets.size() == (size_t)2) njets = 2;
   double dphimin = 999;
   for (int i=0; i<njets; i++) {
     double dphi = MET.DeltaPhi(jets[i]);

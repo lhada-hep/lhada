@@ -46,6 +46,7 @@ cppEQEQ  = re.compile('(?<!=|[>]|[<])=')
 scrubdot = re.compile('[a-zA-Z]+[.]')
 getfunctions = re.compile('^\s*[\w_]+\s+[a-zA-Z][\w_]+\s*[(][^{]+', re.M)
 tlorentz_vector = re.compile('vector\s*[<]\s*TLorentzVector\s*[>]')
+nip      = re.compile('[_](?=[a-zA-Z])|(?<=[a-zA-Z0-9])[_](?= )')
 
 # some objects are singletons. try to guess which ones
 # this is very simpleminded; will have to do better later
@@ -154,7 +155,7 @@ int main(int argc, char** argv)
     }
 
   // count summary
-  std::cout << "event counts" << std::endl;
+  cout << "Summary" << endl << endl;
   for(size_t c=0; c < cuts.size(); c++)
     {
       cuts[c]->summary();
@@ -812,6 +813,25 @@ def convert2cpp(record, btype, blocktypes):
         
             if DEBUG > 0:
                 print "\t\tnew-record( %s )" % strip(record)
+
+        elif btype == 'reject':
+            if undotted:
+                if not a_singleton: oname = "p"
+                edit = re.compile('(?<![.])%s' % field)
+            else:
+                if not a_singleton: oname = "q"
+                edit = re.compile('\\b%s\\b' % name)
+            newfield = '%s("%s")' % (oname, lower(field))
+            
+            if DEBUG > 0:
+                print "\treject: oname( %s ) field( %s ) newfield( %s )" % \
+                (oname, field, newfield)
+                print "\t\told-record( %s )" % strip(record)
+                
+            record = edit.sub(newfield, record)
+        
+            if DEBUG > 0:
+                print "\t\tnew-record( %s )" % strip(record)                   
             
         elif btype == 'cut':
             if undotted:
@@ -982,7 +1002,7 @@ perhaps you're missing a return value in:
             if active_inner_loop:              
                 objdef += '%s%sif ( %s )\n' % (tab, tab4,
                                                    convert2cpp(value,
-                                                                   'object',
+                                                                   'reject',
                                                                    blocktypes))
                 objdef += '%s%s  {\n' % (tab, tab4)
                 objdef += '%s%s    skip = true;\n' % (tab, tab4)
@@ -1102,7 +1122,7 @@ def process_objects(names, blocks, blocktypes):
     names['objdef']     = objdef   
     names['extobjimpl'] = extobjimpl
     names['vobjects']   = vobjects
-#--------------------------------------------------------------------------------    
+#--------------------------------------------------------------------------------
 def process_variables(names, blocks):
     if DEBUG > 0:
         print '\nBEGIN( process_variables )'
@@ -1130,13 +1150,13 @@ def process_variables(names, blocks):
     but the latter may not have been defined in the LHADA file.
     ''' % (name, fname))
                 rtype, intname, extname, argtypes = blocks['function_info'][fname]
-                #func = replace(func, fname, intname)
+                func = replace(func, fname, intname)
                 vardef  += '%s\t%s;\n' % (rtype, name)
                 varimpl += '%s%s\t= %s;\n' % (SPACE6, name, func)
                 
     names['vardef']  = vardef
     names['varimpl'] = varimpl
-#--------------------------------------------------------------------------------    
+#--------------------------------------------------------------------------------
 def process_cuts(names, blocks, blocktypes):
     if DEBUG > 0:
         print '\nBEGIN( process_cuts )'
@@ -1154,35 +1174,8 @@ def process_cuts(names, blocks, blocktypes):
     for name, words, records in blocks['cut']:
         if DEBUG > 0:
             print 'CUT( %s )' % name
-            
-        cutdef += 'struct cut_%s_s : public lhadaThing\n' % name 
-        cutdef += '{\n'
-        cutdef += '  std::string name;\n'
-        cutdef += '  double gtotal;\n'
-        cutdef += '  double total;\n'
-        cutdef += '  double dtotal;\n'
-        cutdef += '  TH1F*  hcount;\n'
-        cutdef += '  bool   done;\n'
-        cutdef += '  bool   result;\n'
-        cutdef += '  double weight;\n\n'
-        cutdef += '  cut_%s_s()\n' % name
-        cutdef += '''    : lhadaThing(),
-      name("%s"),
-      gtotal(0),
-      total(0),
-      dtotal(0),
-      hcount(0),
-      done(false),
-      result(false),
-      weight(1)
-''' % name
-        cutdef += '''  {
-    hcount = new TH1F("cutflow_%s", "", 1, 0, 1);
-    hcount->SetCanExtend(1);
-    hcount->SetStats(0);
 
-    hcount->Fill("none", 0);
-''' % name
+        # get cut strings
         values = []
         for record in records:
             t = split(record)
@@ -1190,37 +1183,78 @@ def process_cuts(names, blocks, blocktypes):
             if token != 'select': continue
             value = joinfields(t[1:], ' ')
             values.append(value)
-            cutdef += '    hcount->Fill("%s", 0);\n' % value        
+
+        cutdef += 'struct cut_%s_s : public lhadaThing\n' % name 
+        cutdef += '{\n'
+        cutdef += '  std::string name;\n'
+        cutdef += '  double total;\n'
+        cutdef += '  double dtotal;\n'
+        cutdef += '  TH1F*  hcount;\n'
+        cutdef += '  bool   done;\n'
+        cutdef += '  bool   result;\n'
+        cutdef += '  double weight;\n\n'
+        cutdef += '  int    ncuts;\n\n'
+        cutdef += '  cut_%s_s()\n' % name
+        cutdef += '''    : lhadaThing(),
+      name("%s"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1),
+      ncuts(%d)
+''' % (name, len(values))
+           
+        cutdef += '''  {
+    hcount = new TH1F("cutflow_%s", "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
+    hcount->Sumw2();
+
+    hcount->Fill("none", 0);
+''' % name
+        
+        for value in values:
+            cutdef += '    hcount->Fill("%s", 0);\n' % nip.sub('', value)        
         cutdef += '  }\n\n'
         cutdef += '  ~cut_%s_s() {}\n\n' % name
-        cutdef += '  void summary()\n'
-        cutdef += '  {\n'
-        cutdef += '    double efficiency = 0;\n'
-        cutdef += '    if ( gtotal > 0 ) efficiency = total / gtotal;\n'
-        cutdef += '    printf("\\t%s-24s %s10.3f +/- %s-10.3f\\t%s6.3f\\n",\n'\
-          % ('%', '%', '%', '%')
-        cutdef += '           name.c_str(), total, sqrt(dtotal), efficiency);\n'
-        cutdef += '  }\n'
-        cutdef += '  void count(string c, double w=1)\t{ hcount->Fill(c.c_str(), w); }\n'
-        cutdef += '  void write(outputFile& out)\t\t{ out.file_->cd(); hcount->Write(); }\n'
-        cutdef += '  void reset()\t\t\t\t{ done = false; result = false; }\n'
-        cutdef += '  bool operator()()\t{ return apply(); }\n\n'     
+        cutdef += '''  void summary()
+  {
+    cout << name << endl;
+    double gtotal = hcount->GetBinContent(1);
+    for(int c=0; c <= ncuts; c++)
+      {
+        double value(hcount->GetBinContent(c+1));
+        double error(hcount->GetBinError(c+1));
+        double efficiency=0;
+        if ( gtotal > 0 ) efficiency = value/gtotal;
+        printf(" %(percent)s2d %(percent)s-45s: %(percent)s9.2f +/- %(percent)s5.1f %(percent)s6.3f\\n",
+               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+      }
+    cout << endl;
+  }
+''' % {'percent': '%'}
+        
+        cutdef += '  void count(string c)\t\t{ hcount->Fill(c.c_str(), weight); }\n'
+        cutdef += '  void write(outputFile& out)\t{ out.file_->cd(); hcount->Write(); }\n'
+        cutdef += '  void reset()\t\t\t{ done = false; result = false; }\n'
+        cutdef += '  bool operator()()\t\t{ return apply(); }\n\n'     
         cutdef += '  bool apply()\n'
         cutdef += '  {\n'
         cutdef +='''    if ( done ) return result;
     done   = true;
     result = false;
-    count("none", weight);
-    gtotal += weight;
+    count("none");
 
 '''       
         for value in values:
             # convert to C++
             cutdef += '%sif ( !(%s) ) return false;\n' % \
               (tab4, convert2cpp(value, 'cut', blocktypes))
-            cutdef += '%scount("%s", weight);\n\n' % (tab4, value)
+            cutdef += '%scount("%s");\n\n' % (tab4, nip.sub('', value))
         cutdef += '%stotal  += weight;\n'  % tab4
-        cutdef += '%sdtotal += weight * weight;\n'  % tab4
+        cutdef += '%sdtotal += weight * weight;\n\n'  % tab4
         cutdef += '%s// NB: remember to update result cache\n' % tab4
         cutdef += '%sresult  = true;\n' % tab4
         cutdef += '%sreturn true;\n' % tab4

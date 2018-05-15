@@ -11,37 +11,37 @@ info analysis
   hepdata http://hepdata.cedar.ac.uk/view/ins1304456
   doi 10.1140/epjc/s10052-016-4184-8
 
-function lha.Meff
+function Meff
   arg jetsSR
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function lha.dphijNjle3METmin
+function dphijNjle3METmin
   arg jetsSR
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function lha.dphijNjgt3METmin
+function dphijNjgt3METmin
   arg jetsSR
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function lha.METovermeffNJ
+function METovermeffNJ
   arg jetsSR
   arg njets
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function lha.METoversqrtHT
+function METoversqrtHT
   arg jetsSR
   arg MET
   code ATLASSUSY1605.03814_functions.h
 
-function lha.aplanarity
+function aplanarity
   arg jetsSR
   code ATLASSUSY1605.03814_functions.h
 
-function lha.dR
+function dR
    arg Eta1
    arg Phi1
    arg Eta2
@@ -58,14 +58,13 @@ object jets
 
 object cleanjets
   take jets
-  loop electrons e
-  apply lha.dR(Eta, Phi, e.Eta, e.Phi) dRje
+  apply dR(Eta, Phi, electrons.Eta, electrons.Phi) dRje
   reject dRje < 0.2
 
 object bjets
 # b-tagging jets
   take jets
-  select BTag = 1
+  select BTag == 1
   select PT > 50
   select |Eta| < 2.5
 
@@ -80,8 +79,7 @@ object muons
 
 object cleanmuons
   take muons
-  loop cleanjets j
-  apply lha.dR(Eta, Phi, j.Eta, j.Phi) dRlj
+  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRlj
   reject dRlj < 0.4
 
 
@@ -93,15 +91,13 @@ object electrons
 
 object cleanelectrons
   take electrons
-  loop cleanjets j
-  apply lha.dR(Eta, Phi, j.Eta, j.Phi) dRlj
+  apply dR(Eta, Phi, cleanjets.Eta, cleanjets.Phi) dRlj
   reject dRlj < 0.4
 
 object verycleanelectrons
   take cleanelectrons
-  loop cleanelectrons e
-  apply lha.dR(Eta, Phi, e.Eta, e.Phi) dRee
-  reject (dRee < 0.05) and (PT < e.PT)
+  apply dR(Eta, Phi, cleanelectrons.Eta, cleanelectrons.Phi) dRee
+  reject (dRee < 0.05) and (PT < cleanelectrons.PT)
 
 object MET
   take Delphes_MissingET
@@ -113,31 +109,31 @@ object jetsSR
 # EVENT VARIABLES
 
 variable Meff
-  apply lha.Meff(jetsSR, MET)
+  apply Meff(jetsSR, MET)
 
 variable dphijNjle3METmin
-  apply lha.dphijNjle3METmin(jetsSR, MET)  
+  apply dphijNjle3METmin(jetsSR, MET)  
 
 variable dphijNjgt3METmin
-  apply lha.dphijNjgt3METmin(jetsSR, MET)  
+  apply dphijNjgt3METmin(jetsSR, MET)  
 
 variable METoversqrtHT
-  apply lha.METoversqrtHT(jetsSR, MET)
+  apply METoversqrtHT(jetsSR, MET)
 
 variable METovermeff2j
-  apply lha.METovermeffNJ(jetsSR, 2, MET)
+  apply METovermeffNJ(jetsSR, 2, MET)
 
 variable METovermeff4j
-  apply lha.METovermeffNJ(jetsSR, 4, MET)
+  apply METovermeffNJ(jetsSR, 4, MET)
 
 variable METovermeff5j
-  apply lha.METovermeffNJ(jetsSR, 5, MET)
+  apply METovermeffNJ(jetsSR, 5, MET)
 
 variable METovermeff6j
-  apply lha.METovermeffNJ(jetsSR, 6, MET)
+  apply METovermeffNJ(jetsSR, 6, MET)
 
 variable aplanarity
-  apply lha.aplanarity(jetsSR)
+  apply aplanarity(jetsSR)
 
 
 # EVENT SELECTION

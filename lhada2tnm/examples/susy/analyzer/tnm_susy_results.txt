@@ -1,0 +1,118 @@
+
+eventBuffer - All branches selected
+number of events: 31250
+0
+10000
+20000
+30000
+Summary
+
+preselection
+  1 none                                         :  31250.00 +/- 176.8  1.000
+  2 MET.PT > 200                                 :  28575.00 +/- 169.0  0.914
+  3 jetsSR.size > 0                              :  28575.00 +/- 169.0  0.914
+
+2jt
+  1 none                                         :  31250.00 +/- 176.8  1.000
+  2 preselection                                 :  28575.00 +/- 169.0  0.914
+  3 jetsSR.size >= 2                             :  28575.00 +/- 169.0  0.914
+  4 jetsSR[0].PT > 200                           :  28568.00 +/- 169.0  0.914
+  5 jetsSR[1].PT > 200                           :  28151.00 +/- 167.8  0.901
+  6 dphijNjle3METmin > 0.8                       :  10456.00 +/- 102.3  0.335
+  7 METoversqrtHT > 20                           :  10456.00 +/- 102.3  0.335
+  8 Meff > 2000                                  :      2.00 +/-   1.4  0.000
+
+2jm
+  1 none                                         :  31250.00 +/- 176.8  1.000
+  2 preselection                                 :  28575.00 +/- 169.0  0.914
+  3 jetsSR.size >= 2                             :  28575.00 +/- 169.0  0.914
+  4 jetsSR[0].PT > 300                           :  28427.00 +/- 168.6  0.910
+  5 jetsSR[1].PT > 50                            :  28427.00 +/- 168.6  0.910
+  6 dphijNjle3METmin > 0.4                       :  12340.00 +/- 111.1  0.395
+  7 METoversqrtHT > 15                           :  12340.00 +/- 111.1  0.395
+  8 Meff > 1600                                  :     36.00 +/-   6.0  0.001
+
+2jl
+  1 none                                         :  31250.00 +/- 176.8  1.000
+  2 preselection                                 :  28575.00 +/- 169.0  0.914
+  3 jetsSR.size >= 2                             :  28575.00 +/- 169.0  0.914
+  4 jetsSR[0].PT > 200                           :  28568.00 +/- 169.0  0.914
+  5 jetsSR[1].PT > 200                           :  28151.00 +/- 167.8  0.901
+  6 dphijNjle3METmin > 0.8                       :  10456.00 +/- 102.3  0.335
+  7 METoversqrtHT > 15                           :  10456.00 +/- 102.3  0.335
+  8 Meff > 1200                                  :    471.00 +/-  21.7  0.015
+
+6jt
+  1 none                                         :  31250.00 +/- 176.8  1.000
+  2 preselection                                 :  28575.00 +/- 169.0  0.914
+  3 jetsSR.size >= 6                             :  11717.00 +/- 108.2  0.375
+  4 jetsSR[0].PT > 200                           :  11716.00 +/- 108.2  0.375
+  5 jetsSR[1].PT > 100                           :  11715.00 +/- 108.2  0.375
+  6 jetsSR[2].PT > 100                           :  11672.00 +/- 108.0  0.374
+  7 jetsSR[3].PT > 100                           :  11244.00 +/- 106.0  0.360
+  8 jetsSR[4].PT > 50                            :  11244.00 +/- 106.0  0.360
+  9 jetsSR[5].PT > 50                            :  11244.00 +/- 106.0  0.360
+ 10 dphijNjle3METmin > 0.4                       :   4853.00 +/-  69.7  0.155
+ 11 dphijNjgt3METmin > 0.2                       :   4853.00 +/-  69.7  0.155
+ 12 aplanarity > 0.04                            :      0.00 +/-   0.0  0.000
+ 13 METovermeff6j > 0.2                          :      0.00 +/-   0.0  0.000
+ 14 Meff > 2000                                  :      0.00 +/-   0.0  0.000
+
+6jm
+  1 none                                         :  31250.00 +/- 176.8  1.000
+  2 preselection                                 :  28575.00 +/- 169.0  0.914
+  3 jetsSR.size >= 6                             :  11717.00 +/- 108.2  0.375
+  4 jetsSR[0].PT > 200                           :  11716.00 +/- 108.2  0.375
+  5 jetsSR[1].PT > 100                           :  11715.00 +/- 108.2  0.375
+  6 jetsSR[2].PT > 100                           :  11672.00 +/- 108.0  0.374
+  7 jetsSR[3].PT > 100                           :  11244.00 +/- 106.0  0.360
+  8 jetsSR[4].PT > 50                            :  11244.00 +/- 106.0  0.360
+  9 jetsSR[5].PT > 50                            :  11244.00 +/- 106.0  0.360
+ 10 dphijNjle3METmin > 0.4                       :   4853.00 +/-  69.7  0.155
+ 11 dphijNjgt3METmin > 0.2                       :   4853.00 +/-  69.7  0.155
+ 12 aplanarity > 0.04                            :      0.00 +/-   0.0  0.000
+ 13 METovermeff6j > 0.25                         :      0.00 +/-   0.0  0.000
+ 14 Meff > 1600                                  :      0.00 +/-   0.0  0.000
+
+5j
+  1 none                                         :  31250.00 +/- 176.8  1.000
+  2 preselection                                 :  28575.00 +/- 169.0  0.914
+  3 jetsSR.size >= 5                             :  20070.00 +/- 141.7  0.642
+  4 jetsSR[0].PT > 200                           :  20066.00 +/- 141.7  0.642
+  5 jetsSR[1].PT > 100                           :  20061.00 +/- 141.6  0.642
+  6 jetsSR[2].PT > 100                           :  19941.00 +/- 141.2  0.638
+  7 jetsSR[3].PT > 100                           :  18589.00 +/- 136.3  0.595
+  8 jetsSR[4].PT > 50                            :  18589.00 +/- 136.3  0.595
+  9 dphijNjle3METmin > 0.4                       :   8036.00 +/-  89.6  0.257
+ 10 dphijNjgt3METmin > 0.2                       :   8036.00 +/-  89.6  0.257
+ 11 aplanarity > 0.04                            :      0.00 +/-   0.0  0.000
+ 12 METovermeff5j > 0.25                         :      0.00 +/-   0.0  0.000
+ 13 Meff > 1600                                  :      0.00 +/-   0.0  0.000
+
+4jt
+  1 none                                         :  31250.00 +/- 176.8  1.000
+  2 preselection                                 :  28575.00 +/- 169.0  0.914
+  3 jetsSR.size >= 4                             :  26814.00 +/- 163.7  0.858
+  4 jetsSR[0].PT > 200                           :  26807.00 +/- 163.7  0.858
+  5 jetsSR[1].PT > 100                           :  26797.00 +/- 163.7  0.858
+  6 jetsSR[2].PT > 100                           :  26525.00 +/- 162.9  0.849
+  7 jetsSR[3].PT > 100                           :  23403.00 +/- 153.0  0.749
+  8 dphijNjle3METmin > 0.4                       :  10123.00 +/- 100.6  0.324
+  9 dphijNjgt3METmin > 0.2                       :  10123.00 +/- 100.6  0.324
+ 10 aplanarity > 0.04                            :      0.00 +/-   0.0  0.000
+ 11 METovermeff4j > 0.2                          :      0.00 +/-   0.0  0.000
+ 12 Meff > 2200                                  :      0.00 +/-   0.0  0.000
+
+==> histograms saved to file analyzer_histograms.root
+TFile**		analyzer_histograms.root	
+ TFile*		analyzer_histograms.root	
+  OBJ: TH1F	counts	 : 0 at: 0x7f9bda507070
+  KEY: TH1F	cutflow_preselection;1	
+  KEY: TH1F	cutflow_2jt;1	
+  KEY: TH1F	cutflow_2jm;1	
+  KEY: TH1F	cutflow_2jl;1	
+  KEY: TH1F	cutflow_6jt;1	
+  KEY: TH1F	cutflow_6jm;1	
+  KEY: TH1F	cutflow_5j;1	
+  KEY: TH1F	cutflow_4jt;1	
+  KEY: TH1F	counts;1	

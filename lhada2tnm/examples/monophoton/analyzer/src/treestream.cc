@@ -1397,7 +1397,7 @@ itreestream::_getleaf(TBranch* branch, TLeaf* leaf)
   v.leafname  = leaf->GetName();
   v.fullname  = v.treename + "/" + v.branchname;
 
-  // associate this field with the chain to which is belongs
+  // associate this field with the chain to which it belongs
   string key = v.treename;
   if ( _chainmap.find(key) == _chainmap.end() )
     {
