@@ -47,8 +47,8 @@ object photons
 
 object tightphotons
   take photons
-  select (|eta| < 1.37) or
-  ((|eta| > 1.52) and (|eta| < 2.37))  
+  select	(|eta| < 1.37) or
+  	 	( (|eta| > 1.52) and (|eta| < 2.37) )  
 
 object electrons
   take Delphes_Electron

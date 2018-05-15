@@ -28,6 +28,8 @@ KEYWORDS   = ['experiment',
               'arg',
               'code',
               'take', 'select', 'apply', 'reject']
+    
+TOKENS = set(BLOCKTYPES+KEYWORDS)
 
 SPACE6   = ' '*6
 
@@ -360,6 +362,20 @@ def extractBlocks(filename):
     fcallname  = re.compile('[a-zA-Z_][\w_]*\s*(?=[(])')
     
     #--------------------------------------------    
+    # strip out comments and blank lines,
+    # but note correct line numbers of records
+    #--------------------------------------------        
+    orig_records = [x for x in records]
+    records = []
+    for ii, record in enumerate(orig_records):
+        lineno = ii+1
+        # strip away comments from current record
+        record = stripcomments.sub('', record)
+        record = strip(record)
+        if record == '': continue
+        records.append((lineno, record))
+
+    #--------------------------------------------    
     # loop over lhada records
     #--------------------------------------------    
     blocks = {}
@@ -368,21 +384,17 @@ def extractBlocks(filename):
     varnames    = [] # keep track of declared variables
     objectnames = [] # keep track of block names
     cutnames    = [] # keep track of cut names
-
-    fullrecord = []
-    for ii, record in enumerate(records):
-        iline = ii+1
-        # strip away comments from current record
-        record = stripcomments.sub('', record)
-        if strip(record) == '': continue
-
+    statement   = [] # keep track of records that comprise a statement
+    
+    for ii, (lineno, record) in enumerate(records):
+        
         # look for a block
         if isblock.findall(record) != []:
 
             # found a block; get its type and name
             t = split(record)
             if len(t) != 2:
-                boohoo('problem at line\n%4d %s\n' % (iline, record))
+                boohoo('problem at line\n%4d %s\n' % (lineno, record))
             # block type, block name
             btype, bname = t
 
@@ -396,7 +408,7 @@ def extractBlocks(filename):
             # fall on sword if we have duplicate block names
             if blocks.has_key(bname):
                 boohoo('duplicate block name %s at line'\
-                           '\n%4d %s\n' % (bname, iline, record))
+                           '\n%4d %s\n' % (bname, lineno, record))
                             
             blocks[bname] = {'type': btype, 'body': []}
             if btype == 'object':
@@ -410,20 +422,27 @@ def extractBlocks(filename):
             continue
         
         if bname == None:
-            boohoo('problem at line\n%4d %s\n' % (iline, record))
+            boohoo('problem at line\n%4d %s\n' % (lineno, record))
 
-        # lookahead to find end of statement
-        fullrecord.append(strip(record))
+        # lookahead to determine if current record is the end
+        # of the current statement
+        statement.append(record)
         if ii < len(records)-1:
-            t = split(records[ii+1])
-            if len(t) == 0 or ((len(t) > 0) and (t[0] in KEYWORDS)):
-                # next line is either blank or starts with a token, so current record
-                # ends the statement
-                blocks[bname]['body'].append(joinfields(fullrecord, ' '))
-                fullrecord = []
+            next_lineno, next_record = records[ii+1]
+            next_token = split(next_record)[0]
+            
+            # check next token
+            if  next_token in TOKENS:
+                # next token is a reserved token (either a blocktype
+                # or a keyword), so current record is the end of the
+                # current the statement
+                blocks[bname]['body'].append(joinfields(statement, ' '))
+                # remember to reset statement
+                statement = []
         else:
-            blocks[bname]['body'].append(joinfields(fullrecord, ' '))
-            fullrecord = []
+            # reached end of records
+            blocks[bname]['body'].append(joinfields(statement, ' '))
+            statement = []
             
     # convert to sets for easier comparisons
     objectnames = set(objectnames)
@@ -1139,6 +1158,7 @@ def process_cuts(names, blocks, blocktypes):
         cutdef += 'struct cut_%s_s : public lhadaThing\n' % name 
         cutdef += '{\n'
         cutdef += '  std::string name;\n'
+        cutdef += '  double gtotal;\n'
         cutdef += '  double total;\n'
         cutdef += '  double dtotal;\n'
         cutdef += '  TH1F*  hcount;\n'
@@ -1148,6 +1168,7 @@ def process_cuts(names, blocks, blocktypes):
         cutdef += '  cut_%s_s()\n' % name
         cutdef += '''    : lhadaThing(),
       name("%s"),
+      gtotal(0),
       total(0),
       dtotal(0),
       hcount(0),
@@ -1174,8 +1195,11 @@ def process_cuts(names, blocks, blocktypes):
         cutdef += '  ~cut_%s_s() {}\n\n' % name
         cutdef += '  void summary()\n'
         cutdef += '  {\n'
-        cutdef += '    printf("\\t%s-24s %s10.3f (%s10.3f)\\n",\n' % ('%', '%', '%')
-        cutdef += '           name.c_str(), total, sqrt(dtotal));\n'
+        cutdef += '    double efficiency = 0;\n'
+        cutdef += '    if ( gtotal > 0 ) efficiency = total / gtotal;\n'
+        cutdef += '    printf("\\t%s-24s %s10.3f +/- %s-10.3f\\t%s6.3f\\n",\n'\
+          % ('%', '%', '%', '%')
+        cutdef += '           name.c_str(), total, sqrt(dtotal), efficiency);\n'
         cutdef += '  }\n'
         cutdef += '  void count(string c, double w=1)\t{ hcount->Fill(c.c_str(), w); }\n'
         cutdef += '  void write(outputFile& out)\t\t{ out.file_->cd(); hcount->Write(); }\n'
@@ -1187,6 +1211,7 @@ def process_cuts(names, blocks, blocktypes):
     done   = true;
     result = false;
     count("none", weight);
+    gtotal += weight;
 
 '''       
         for value in values:
@@ -1196,6 +1221,7 @@ def process_cuts(names, blocks, blocktypes):
             cutdef += '%scount("%s", weight);\n\n' % (tab4, value)
         cutdef += '%stotal  += weight;\n'  % tab4
         cutdef += '%sdtotal += weight * weight;\n'  % tab4
+        cutdef += '%s// NB: remember to update result cache\n' % tab4
         cutdef += '%sresult  = true;\n' % tab4
         cutdef += '%sreturn true;\n' % tab4
         cutdef += '  }\n'            
