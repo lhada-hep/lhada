@@ -1167,7 +1167,7 @@ def process_cuts(names, blocks, blocktypes):
         cutdef += '  double weight;\n\n'
         cutdef += '  cut_%s_s()\n' % name
         cutdef += '''    : lhadaThing(),
-      name("cutflow_%s"),
+      name("%s"),
       gtotal(0),
       total(0),
       dtotal(0),
@@ -1177,12 +1177,12 @@ def process_cuts(names, blocks, blocktypes):
       weight(1)
 ''' % name
         cutdef += '''  {
-    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount = new TH1F("cutflow_%s", "", 1, 0, 1);
     hcount->SetCanExtend(1);
     hcount->SetStats(0);
 
     hcount->Fill("none", 0);
-'''
+''' % name
         values = []
         for record in records:
             t = split(record)
