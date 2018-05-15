@@ -1167,7 +1167,7 @@ def process_cuts(names, blocks, blocktypes):
         cutdef += '  double weight;\n\n'
         cutdef += '  cut_%s_s()\n' % name
         cutdef += '''    : lhadaThing(),
-      name("%s"),
+      name("cutflow_%s"),
       gtotal(0),
       total(0),
       dtotal(0),
