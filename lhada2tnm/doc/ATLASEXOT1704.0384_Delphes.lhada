@@ -47,8 +47,8 @@ object photons
 
 object tightphotons
   take photons
-  select |eta| < 1.37
-  select |eta| > 1.52 and |eta| < 2.37  
+  select (|eta| < 1.37) or
+  ((|eta| > 1.52) and (|eta| < 2.37))  
 
 object electrons
   take Delphes_Electron
@@ -132,5 +132,4 @@ cut SRE1
 
 cut SRE2
   select preselection
-  select MET.PT > 225 and MET.PT < 300
-
+  select MET.PT > 225 and MET.PT < 300  

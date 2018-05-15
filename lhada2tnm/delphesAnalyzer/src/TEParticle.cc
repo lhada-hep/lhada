@@ -44,12 +44,12 @@ TEParticle::TEParticle(int PID_,
 {
   SetPtEtaPhiM(pt, eta, phi, mass);
   
-  Value["pt"]    = Pt();
-  Value["eta"]   = Eta();
-  Value["|eta|"] = fabs(Eta());
-  Value["phi"]   = Phi();
-  Value["mass"]  = M();
-  Value["m"]     = M();
+  Value["pt"]    = pt;
+  Value["eta"]   = eta;
+  Value["|eta|"] = abs(eta);
+  Value["phi"]   = phi;
+  Value["mass"]  = mass;
+  Value["m"]     = mass;
 }
 
 
@@ -67,10 +67,10 @@ TEParticle::TEParticle(const TEParticle& p)
     Value(p.Value)
 {
   SetPtEtaPhiM(p.Pt(), p.Eta(), p.Phi(), p.M());
-
+  
   Value["pt"]    = Pt();
   Value["eta"]   = Eta();
-  Value["|eta|"] = fabs(Value["Eta"]);
+  Value["|eta|"] = abs(Eta());
   Value["phi"]   = Phi();
   Value["mass"]  = M();
   Value["m"]     = M(); 
@@ -116,7 +116,7 @@ TEParticle TEParticle::operator+(const TEParticle& o) const
 
   q.Value["pt"]    = p.Pt();
   q.Value["eta"]   = p.Eta();
-  q.Value["|eta|"] = fabs(p.Eta());
+  q.Value["|eta|"] = abs(p.Eta());
   q.Value["phi"]   = p.Phi();
   q.Value["mass"]  = p.M();
   q.Value["m"]     = p.M();
@@ -135,7 +135,7 @@ TEParticle TEParticle::operator-(const TEParticle& o) const
 
   q.Value["pt"]    = p.Pt();
   q.Value["eta"]   = p.Eta();
-  q.Value["|eta|"] = fabs(p.Eta());
+  q.Value["|eta|"] = abs(p.Eta());
   q.Value["phi"]   = p.Phi();
   q.Value["mass"]  = p.M();
   q.Value["m"]     = p.M();
@@ -158,7 +158,8 @@ double TEParticle::operator()(std::string a)
     }
   catch (...)
     {
-      return 0;
+      cout << "** TEParticle ** attribute " << a << " not found " << endl;
+      exit(0);
     }
 }
 

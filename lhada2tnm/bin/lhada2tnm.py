@@ -5,6 +5,7 @@
 #          12-May-2018 HBP assume case insensitivity, remove dependence on loop
 #                      keyword, better handling of mapping from vector<TEParticle>
 #                      to vector<TLorentzVector>
+#          14-May-2018 HBP add count histogram for each cut block
 #--------------------------------------------------------------------------------
 import sys, os, re, optparse, urllib
 from time import ctime
@@ -43,6 +44,10 @@ cppEQEQ  = re.compile('(?<!=|[>]|[<])=')
 scrubdot = re.compile('[a-zA-Z]+[.]')
 getfunctions = re.compile('^\s*[\w_]+\s+[a-zA-Z][\w_]+\s*[(][^{]+', re.M)
 tlorentz_vector = re.compile('vector\s*[<]\s*TLorentzVector\s*[>]')
+
+# some objects are singletons. try to guess which ones
+# this is very simpleminded; will have to do better later
+single   = re.compile('missing|met|event|scalar')
 #--------------------------------------------------------------------------------
 NAMES = {'name': 'analyzer',
              'treename': 'Delphes',
@@ -75,9 +80,9 @@ using namespace std;
 //----------------------------------------------------------------------------
 %(fundef)s
 //----------------------------------------------------------------------------
-%(objdef)s
-//----------------------------------------------------------------------------
 %(vardef)s
+//----------------------------------------------------------------------------
+%(objdef)s
 //----------------------------------------------------------------------------
 %(cutdef)s
 //----------------------------------------------------------------------------
@@ -121,21 +126,39 @@ int main(int argc, char** argv)
   // -------------------------------------------------------------------------
   %(adaptername)s %(adapter)s;
 
+%(vobjects)s
+%(vcuts)s
   // -------------------------------------------------------------------------
   // Loop over events
-  // ------------------------------------------------------------------
-
+  // -------------------------------------------------------------------------
   for(int entry=0; entry < nevents; entry++)
     {
       // read an event into event buffer
       ev.read(entry);
 
+      if ( entry %(percent)s 10000 == 0 ) cout << entry << endl;
+
 %(extobjimpl)s
-%(intobjimpl)s
+      // create filtered objects
+      for(size_t c=0; c < objects.size(); c++) objects[c]->create();
+
 %(varimpl)s
-%(cutimpl)s
+      // apply event level selections
+      for(size_t c=0; c < cuts.size(); c++)
+        { 
+          cuts[c]->reset();
+          cuts[c]->apply();
+        }
+    }
+
+  // count summary
+  std::cout << "event counts" << std::endl;
+  for(size_t c=0; c < cuts.size(); c++)
+    {
+      cuts[c]->summary();
+      cuts[c]->write(of);
     }   
-%(summary)s
+
   ev.close();
   of.close();
   return 0;
@@ -345,7 +368,8 @@ def extractBlocks(filename):
     varnames    = [] # keep track of declared variables
     objectnames = [] # keep track of block names
     cutnames    = [] # keep track of cut names
-    
+
+    fullrecord = []
     for ii, record in enumerate(records):
         iline = ii+1
         # strip away comments from current record
@@ -387,9 +411,20 @@ def extractBlocks(filename):
         
         if bname == None:
             boohoo('problem at line\n%4d %s\n' % (iline, record))
-            
-        blocks[bname]['body'].append(record)
 
+        # lookahead to find end of statement
+        fullrecord.append(strip(record))
+        if ii < len(records)-1:
+            t = split(records[ii+1])
+            if len(t) == 0 or ((len(t) > 0) and (t[0] in KEYWORDS)):
+                # next line is either blank or starts with a token, so current record
+                # ends the statement
+                blocks[bname]['body'].append(joinfields(fullrecord, ' '))
+                fullrecord = []
+        else:
+            blocks[bname]['body'].append(joinfields(fullrecord, ' '))
+            fullrecord = []
+            
     # convert to sets for easier comparisons
     objectnames = set(objectnames)
     cutnames    = set(cutnames)
@@ -690,7 +725,7 @@ def convert2cpp(record, btype, blocktypes):
     record = replace(record, "[", ";:")
     record = replace(record, "]", ":;")
     record = cppAND.sub('&&', record)
-    record = cppOR.sub('||', record)
+    record = cppOR.sub('||\n\t', record)
 
     # use a set to avoid recursive edits
     words  = set(getvars.findall(record))
@@ -969,17 +1004,13 @@ def process_objects(names, blocks, blocktypes):
     tab6 = ' '*6
     tab8 = ' '*8
     
-    # some objects are singletons. try to guess which ones
-    # this is very simpleminded; will have to do better later
-    single = re.compile('missing.*et|met|event|scalar|ht')
-
     extobjdef = ''
     intobjdef = ''
     extobj = set()
-    
-    extobjimpl = ''
-    intobjimpl = '%s// create internal objects\n' % tab6
-    
+
+    vobjects  = '%s// cache pointers to filtered objects\n' % tab2    
+    vobjects += '%svector<lhadaThing*> objects;\n' % tab2
+
     for name, words, records in blocks['object']:
         if DEBUG > 0:
             print 'OBJECT( %s )' % name
@@ -991,20 +1022,22 @@ def process_objects(names, blocks, blocktypes):
                 objname = t[1]
                 if objname not in blocktypes['object']:
                     extobj.add(objname)
-                    if single.findall(lower(objname)) == []:
-                        extobjdef += 'vector<TEParticle> %s;\n' % objname
-                    else:
+                    singleton = single.findall(lower(objname)) != []
+                    if singleton:
                         extobjdef += '\nTEParticle %s;\n\n' % objname
                         SINGLETON_CACHE.add(name)
                         if DEBUG > 0:
                             print "\tsingleton object( %s )" % name
+                    else:
+                        extobjdef += 'vector<TEParticle> %s;\n' % objname
                             
-        if single.findall(lower(name)) == []:                        
-            intobjdef += 'vector<TEParticle> %s;\n' % name
-        else:
+        singleton = single.findall(lower(name)) != []
+        if singleton:
             intobjdef += '\nTEParticle %s;\n\n' % name
-            
-        intobjimpl += '%sobject_%s();\n' % (tab6, name)
+        else:
+            intobjdef += 'vector<TEParticle> %s;\n' % name
+
+        vobjects += '%sobjects.push_back(&object_%s);\n' % (tab2, name)            
         
     objdef = '''// external objects
 %s
@@ -1023,7 +1056,11 @@ def process_objects(names, blocks, blocktypes):
     objdef += '{\n'
     objdef += '  lhadaThing() {}\n'
     objdef += '  ~lhadaThing() {}\n'
-    objdef += '  virtual void summary() {}\n'    
+    objdef += '  virtual void reset() {}\n'
+    objdef += '  virtual void create() {}\n'
+    objdef += '  virtual bool apply() { return true; }\n'
+    objdef += '  virtual void write(outputFile& out) {}\n'
+    objdef += '  virtual void summary() {}\n'
     objdef += '};\n\n'
     
     for name, words, records in blocks['object']:
@@ -1031,10 +1068,10 @@ def process_objects(names, blocks, blocktypes):
         objdef += '{\n'
         objdef += '%sobject_%s_s() : lhadaThing() {}\n' % (tab2, name)
         objdef += '%s~object_%s_s() {}\n' % (tab2, name) 
-        objdef += '%svoid operator()()\n' % tab2
+        objdef += '%svoid create()\n' % tab2
         objdef += '%s{\n' % tab2
-        singleton = single.findall(lower(name)) != []
         
+        singleton = single.findall(lower(name)) != []
         if singleton:
             objdef += process_singleton_object(name, records, tab4, blocktypes)
         else:
@@ -1045,7 +1082,7 @@ def process_objects(names, blocks, blocktypes):
         
     names['objdef']     = objdef   
     names['extobjimpl'] = extobjimpl
-    names['intobjimpl'] = intobjimpl
+    names['vobjects']   = vobjects
 #--------------------------------------------------------------------------------    
 def process_variables(names, blocks):
     if DEBUG > 0:
@@ -1086,15 +1123,10 @@ def process_cuts(names, blocks, blocktypes):
         print '\nBEGIN( process_cuts )'
             
     cutdef  = '// selections\n'
-    cutimpl = '%s// apply event level selections\n' % SPACE6
-    summary = '  // count summary\n'
-    summary += '  vector<lhadaThing*> cut;\n'
+    vcuts   = '  // cache pointers to cuts\n'
+    vcuts  += '  vector<lhadaThing*> cuts;\n'
     for name, words, records in blocks['cut']:    
-        summary += '  cut.push_back(&cut_%s);\n' % name
-    summary += '\n'
-    summary += '  std::cout << "event counts" << std::endl;\n'
-    summary += '  for(size_t c=0; c < cut.size(); c++)\n'
-    summary += '    cut[c]->summary();\n'       
+        vcuts += '  cuts.push_back(&cut_%s);\n' % name
     
     # implement selections
     tab2 = ' '*2
@@ -1107,37 +1139,70 @@ def process_cuts(names, blocks, blocktypes):
         cutdef += 'struct cut_%s_s : public lhadaThing\n' % name 
         cutdef += '{\n'
         cutdef += '  std::string name;\n'
-        cutdef += '  double count;\n'
-        cutdef += '  double dcount;\n'
-        cutdef += '  cut_%s_s() : lhadaThing(), name("%s"), count(0), dcount(0) {}\n' \
-          % (name, name)
-        cutdef += '  ~cut_%s_s() {}\n' % name
+        cutdef += '  double total;\n'
+        cutdef += '  double dtotal;\n'
+        cutdef += '  TH1F*  hcount;\n'
+        cutdef += '  bool   done;\n'
+        cutdef += '  bool   result;\n'
+        cutdef += '  double weight;\n\n'
+        cutdef += '  cut_%s_s()\n' % name
+        cutdef += '''    : lhadaThing(),
+      name("%s"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1)
+''' % name
+        cutdef += '''  {
+    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
 
-        cutdef += '  void summary()\n'
-        cutdef += '  {\n'
-        cutdef += '    printf("\\t%s-24s %s10.3f (%s10.3f)\\n",\n' % ('%', '%', '%')
-        cutdef += '           name.c_str(), count, sqrt(dcount));\n'
-        cutdef += '  }\n';      
-        cutdef += '  bool operator()(double weight=1)\n'
-        cutdef += '  {\n'
+    hcount->Fill("none", 0);
+'''
+        values = []
         for record in records:
             t = split(record)
             token = t[0]
             if token != 'select': continue
             value = joinfields(t[1:], ' ')
-            # decode
+            values.append(value)
+            cutdef += '    hcount->Fill("%s", 0);\n' % value        
+        cutdef += '  }\n\n'
+        cutdef += '  ~cut_%s_s() {}\n\n' % name
+        cutdef += '  void summary()\n'
+        cutdef += '  {\n'
+        cutdef += '    printf("\\t%s-24s %s10.3f (%s10.3f)\\n",\n' % ('%', '%', '%')
+        cutdef += '           name.c_str(), total, sqrt(dtotal));\n'
+        cutdef += '  }\n'
+        cutdef += '  void count(string c, double w=1)\t{ hcount->Fill(c.c_str(), w); }\n'
+        cutdef += '  void write(outputFile& out)\t\t{ out.file_->cd(); hcount->Write(); }\n'
+        cutdef += '  void reset()\t\t\t\t{ done = false; result = false; }\n'
+        cutdef += '  bool operator()()\t{ return apply(); }\n\n'     
+        cutdef += '  bool apply()\n'
+        cutdef += '  {\n'
+        cutdef +='''    if ( done ) return result;
+    done   = true;
+    result = false;
+    count("none", weight);
+
+'''       
+        for value in values:
+            # convert to C++
             cutdef += '%sif ( !(%s) ) return false;\n' % \
               (tab4, convert2cpp(value, 'cut', blocktypes))
-        cutdef += '%scount  += weight;\n'  % tab4
-        cutdef += '%sdcount += weight * weight;\n'  % tab4
+            cutdef += '%scount("%s", weight);\n\n' % (tab4, value)
+        cutdef += '%stotal  += weight;\n'  % tab4
+        cutdef += '%sdtotal += weight * weight;\n'  % tab4
+        cutdef += '%sresult  = true;\n' % tab4
         cutdef += '%sreturn true;\n' % tab4
         cutdef += '  }\n'            
         cutdef += '} cut_%s;\n\n' % name
-        cutimpl += '%scut_%s();\n' % (SPACE6, name)
 
-    names['cutdef']  = cutdef
-    names['cutimpl'] = cutimpl
-    names['summary'] = summary
+    names['cutdef'] = cutdef
+    names['vcuts']  = vcuts
 #--------------------------------------------------------------------------------
 def main():
     filename, option = decodeCommandLine()
@@ -1152,7 +1217,7 @@ def main():
     names['vardef']   = ''
     names['aodimpl']  = ''
     names['analysis'] = ''
-    
+    names['percent']  = '%'
     blocks = extractBlocks(filename)
 
     blocktypes = {}

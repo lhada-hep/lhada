@@ -13,7 +13,7 @@
 //	hepdata     	https://www.hepdata.net/record/ins1591328
 //	doi         	10.1140/epjc/s10052-017-4965-8
 //
-// Created:     Sun May 13 22:06:40 2018 by lhada2tnm.py
+// Created:     Tue May 15 03:16:45 2018 by lhada2tnm.py
 //----------------------------------------------------------------------------
 #include <algorithm>
 #include "tnm.h"
@@ -56,6 +56,10 @@ double	_dPhi(double Phi1, double Phi2)
 
 
 //----------------------------------------------------------------------------
+// variables
+double	METoverSqrtSumET_;
+
+//----------------------------------------------------------------------------
 // external objects
 
 TEParticle Delphes_scalarHT;
@@ -91,6 +95,10 @@ struct lhadaThing
 {
   lhadaThing() {}
   ~lhadaThing() {}
+  virtual void reset() {}
+  virtual void create() {}
+  virtual bool apply() { return true; }
+  virtual void write(outputFile& out) {}
   virtual void summary() {}
 };
 
@@ -98,7 +106,7 @@ struct object_scalarHT_s : public lhadaThing
 {
   object_scalarHT_s() : lhadaThing() {}
   ~object_scalarHT_s() {}
-  void operator()()
+  void create()
   {
     scalarHT = Delphes_scalarHT;
   };
@@ -108,7 +116,7 @@ struct object_photons_s : public lhadaThing
 {
   object_photons_s() : lhadaThing() {}
   ~object_photons_s() {}
-  void operator()()
+  void create()
   {
     photons.clear();
     for(size_t c=0; c < Delphes_Photon.size(); c++)
@@ -125,7 +133,7 @@ struct object_muons_s : public lhadaThing
 {
   object_muons_s() : lhadaThing() {}
   ~object_muons_s() {}
-  void operator()()
+  void create()
   {
     muons.clear();
     for(size_t c=0; c < Delphes_Muon.size(); c++)
@@ -142,7 +150,7 @@ struct object_jets_s : public lhadaThing
 {
   object_jets_s() : lhadaThing() {}
   ~object_jets_s() {}
-  void operator()()
+  void create()
   {
     jets.clear();
     for(size_t c=0; c < Delphes_Jet.size(); c++)
@@ -159,7 +167,7 @@ struct object_MET_s : public lhadaThing
 {
   object_MET_s() : lhadaThing() {}
   ~object_MET_s() {}
-  void operator()()
+  void create()
   {
     MET = Delphes_MissingET;
   };
@@ -169,7 +177,7 @@ struct object_electrons_s : public lhadaThing
 {
   object_electrons_s() : lhadaThing() {}
   ~object_electrons_s() {}
-  void operator()()
+  void create()
   {
     electrons.clear();
     for(size_t c=0; c < Delphes_Electron.size(); c++)
@@ -186,14 +194,14 @@ struct object_tightphotons_s : public lhadaThing
 {
   object_tightphotons_s() : lhadaThing() {}
   ~object_tightphotons_s() {}
-  void operator()()
+  void create()
   {
     tightphotons.clear();
     for(size_t c=0; c < photons.size(); c++)
       {
         TEParticle& p = photons[c];
-        if ( !(p("|eta|") < 1.37) ) continue;
-        if ( !(p("|eta|") > 1.52 && p("|eta|") < 2.37) ) continue;
+        if ( !((p("|eta|") < 1.37) ||
+	 ((p("|eta|") > 1.52) && (p("|eta|") < 2.37))) ) continue;
         tightphotons.push_back(p);
       }
   };
@@ -203,7 +211,7 @@ struct object_cleanjets_s : public lhadaThing
 {
   object_cleanjets_s() : lhadaThing() {}
   ~object_cleanjets_s() {}
-  void operator()()
+  void create()
   {
     cleanjets.clear();
     for(size_t c=0; c < jets.size(); c++)
@@ -231,7 +239,7 @@ struct object_cleanelectrons_s : public lhadaThing
 {
   object_cleanelectrons_s() : lhadaThing() {}
   ~object_cleanelectrons_s() {}
-  void operator()()
+  void create()
   {
     cleanelectrons.clear();
     for(size_t c=0; c < electrons.size(); c++)
@@ -259,7 +267,7 @@ struct object_jetsSR_s : public lhadaThing
 {
   object_jetsSR_s() : lhadaThing() {}
   ~object_jetsSR_s() {}
-  void operator()()
+  void create()
   {
     jetsSR.clear();
     for(size_t c=0; c < cleanjets.size(); c++)
@@ -291,7 +299,7 @@ struct object_cleanmuons_s : public lhadaThing
 {
   object_cleanmuons_s() : lhadaThing() {}
   ~object_cleanmuons_s() {}
-  void operator()()
+  void create()
   {
     cleanmuons.clear();
     for(size_t c=0; c < muons.size(); c++)
@@ -317,33 +325,80 @@ struct object_cleanmuons_s : public lhadaThing
 
 
 //----------------------------------------------------------------------------
-// variables
-double	METoverSqrtSumET_;
-
-//----------------------------------------------------------------------------
 // selections
 struct cut_preselection_s : public lhadaThing
 {
   std::string name;
-  double count;
-  double dcount;
-  cut_preselection_s() : lhadaThing(), name("preselection"), count(0), dcount(0) {}
+  double total;
+  double dtotal;
+  TH1F*  hcount;
+  bool   done;
+  bool   result;
+  double weight;
+
+  cut_preselection_s()
+    : lhadaThing(),
+      name("preselection"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1)
+  {
+    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
+
+    hcount->Fill("none", 0);
+    hcount->Fill("tightphotons.size > 0", 0);
+    hcount->Fill("tightphotons[0].PT > 150", 0);
+    hcount->Fill("_dPhi(tightphotons[0].Phi, MET.Phi) > 0.4", 0);
+    hcount->Fill("METoverSqrtSumET_ > 8.5", 0);
+    hcount->Fill("cleanmuons.size == 0", 0);
+    hcount->Fill("cleanelectrons.size == 0", 0);
+  }
+
   ~cut_preselection_s() {}
+
   void summary()
   {
     printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), count, sqrt(dcount));
+           name.c_str(), total, sqrt(dtotal));
   }
-  bool operator()(double weight=1)
+  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
+  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
+  void reset()				{ done = false; result = false; }
+  bool operator()()	{ return apply(); }
+
+  bool apply()
   {
+    if ( done ) return result;
+    done   = true;
+    result = false;
+    count("none", weight);
+
     if ( !(tightphotons.size() > 0) ) return false;
+    count("tightphotons.size > 0", weight);
+
     if ( !(tightphotons[0]("pt") > 150) ) return false;
+    count("tightphotons[0].PT > 150", weight);
+
     if ( !(_dPhi(tightphotons[0]("phi"), MET("phi")) > 0.4) ) return false;
+    count("_dPhi(tightphotons[0].Phi, MET.Phi) > 0.4", weight);
+
     if ( !(METoverSqrtSumET_ > 8.5) ) return false;
+    count("METoverSqrtSumET_ > 8.5", weight);
+
     if ( !(cleanmuons.size() == 0) ) return false;
+    count("cleanmuons.size == 0", weight);
+
     if ( !(cleanelectrons.size() == 0) ) return false;
-    count  += weight;
-    dcount += weight * weight;
+    count("cleanelectrons.size == 0", weight);
+
+    total  += weight;
+    dtotal += weight * weight;
+    result  = true;
     return true;
   }
 } cut_preselection;
@@ -351,21 +406,60 @@ struct cut_preselection_s : public lhadaThing
 struct cut_SRE2_s : public lhadaThing
 {
   std::string name;
-  double count;
-  double dcount;
-  cut_SRE2_s() : lhadaThing(), name("SRE2"), count(0), dcount(0) {}
+  double total;
+  double dtotal;
+  TH1F*  hcount;
+  bool   done;
+  bool   result;
+  double weight;
+
+  cut_SRE2_s()
+    : lhadaThing(),
+      name("SRE2"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1)
+  {
+    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
+
+    hcount->Fill("none", 0);
+    hcount->Fill("preselection", 0);
+    hcount->Fill("MET.PT > 225 and MET.PT < 300", 0);
+  }
+
   ~cut_SRE2_s() {}
+
   void summary()
   {
     printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), count, sqrt(dcount));
+           name.c_str(), total, sqrt(dtotal));
   }
-  bool operator()(double weight=1)
+  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
+  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
+  void reset()				{ done = false; result = false; }
+  bool operator()()	{ return apply(); }
+
+  bool apply()
   {
+    if ( done ) return result;
+    done   = true;
+    result = false;
+    count("none", weight);
+
     if ( !(cut_preselection()) ) return false;
+    count("preselection", weight);
+
     if ( !(MET("pt") > 225 && MET("pt") < 300) ) return false;
-    count  += weight;
-    dcount += weight * weight;
+    count("MET.PT > 225 and MET.PT < 300", weight);
+
+    total  += weight;
+    dtotal += weight * weight;
+    result  = true;
     return true;
   }
 } cut_SRE2;
@@ -373,21 +467,60 @@ struct cut_SRE2_s : public lhadaThing
 struct cut_SRI1_s : public lhadaThing
 {
   std::string name;
-  double count;
-  double dcount;
-  cut_SRI1_s() : lhadaThing(), name("SRI1"), count(0), dcount(0) {}
+  double total;
+  double dtotal;
+  TH1F*  hcount;
+  bool   done;
+  bool   result;
+  double weight;
+
+  cut_SRI1_s()
+    : lhadaThing(),
+      name("SRI1"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1)
+  {
+    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
+
+    hcount->Fill("none", 0);
+    hcount->Fill("preselection", 0);
+    hcount->Fill("MET.PT > 150", 0);
+  }
+
   ~cut_SRI1_s() {}
+
   void summary()
   {
     printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), count, sqrt(dcount));
+           name.c_str(), total, sqrt(dtotal));
   }
-  bool operator()(double weight=1)
+  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
+  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
+  void reset()				{ done = false; result = false; }
+  bool operator()()	{ return apply(); }
+
+  bool apply()
   {
+    if ( done ) return result;
+    done   = true;
+    result = false;
+    count("none", weight);
+
     if ( !(cut_preselection()) ) return false;
+    count("preselection", weight);
+
     if ( !(MET("pt") > 150) ) return false;
-    count  += weight;
-    dcount += weight * weight;
+    count("MET.PT > 150", weight);
+
+    total  += weight;
+    dtotal += weight * weight;
+    result  = true;
     return true;
   }
 } cut_SRI1;
@@ -395,21 +528,60 @@ struct cut_SRI1_s : public lhadaThing
 struct cut_SRI2_s : public lhadaThing
 {
   std::string name;
-  double count;
-  double dcount;
-  cut_SRI2_s() : lhadaThing(), name("SRI2"), count(0), dcount(0) {}
+  double total;
+  double dtotal;
+  TH1F*  hcount;
+  bool   done;
+  bool   result;
+  double weight;
+
+  cut_SRI2_s()
+    : lhadaThing(),
+      name("SRI2"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1)
+  {
+    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
+
+    hcount->Fill("none", 0);
+    hcount->Fill("preselection", 0);
+    hcount->Fill("MET.PT > 225", 0);
+  }
+
   ~cut_SRI2_s() {}
+
   void summary()
   {
     printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), count, sqrt(dcount));
+           name.c_str(), total, sqrt(dtotal));
   }
-  bool operator()(double weight=1)
+  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
+  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
+  void reset()				{ done = false; result = false; }
+  bool operator()()	{ return apply(); }
+
+  bool apply()
   {
+    if ( done ) return result;
+    done   = true;
+    result = false;
+    count("none", weight);
+
     if ( !(cut_preselection()) ) return false;
+    count("preselection", weight);
+
     if ( !(MET("pt") > 225) ) return false;
-    count  += weight;
-    dcount += weight * weight;
+    count("MET.PT > 225", weight);
+
+    total  += weight;
+    dtotal += weight * weight;
+    result  = true;
     return true;
   }
 } cut_SRI2;
@@ -417,21 +589,60 @@ struct cut_SRI2_s : public lhadaThing
 struct cut_SRI3_s : public lhadaThing
 {
   std::string name;
-  double count;
-  double dcount;
-  cut_SRI3_s() : lhadaThing(), name("SRI3"), count(0), dcount(0) {}
+  double total;
+  double dtotal;
+  TH1F*  hcount;
+  bool   done;
+  bool   result;
+  double weight;
+
+  cut_SRI3_s()
+    : lhadaThing(),
+      name("SRI3"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1)
+  {
+    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
+
+    hcount->Fill("none", 0);
+    hcount->Fill("preselection", 0);
+    hcount->Fill("MET.PT > 300", 0);
+  }
+
   ~cut_SRI3_s() {}
+
   void summary()
   {
     printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), count, sqrt(dcount));
+           name.c_str(), total, sqrt(dtotal));
   }
-  bool operator()(double weight=1)
+  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
+  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
+  void reset()				{ done = false; result = false; }
+  bool operator()()	{ return apply(); }
+
+  bool apply()
   {
+    if ( done ) return result;
+    done   = true;
+    result = false;
+    count("none", weight);
+
     if ( !(cut_preselection()) ) return false;
+    count("preselection", weight);
+
     if ( !(MET("pt") > 300) ) return false;
-    count  += weight;
-    dcount += weight * weight;
+    count("MET.PT > 300", weight);
+
+    total  += weight;
+    dtotal += weight * weight;
+    result  = true;
     return true;
   }
 } cut_SRI3;
@@ -439,21 +650,60 @@ struct cut_SRI3_s : public lhadaThing
 struct cut_SRE1_s : public lhadaThing
 {
   std::string name;
-  double count;
-  double dcount;
-  cut_SRE1_s() : lhadaThing(), name("SRE1"), count(0), dcount(0) {}
+  double total;
+  double dtotal;
+  TH1F*  hcount;
+  bool   done;
+  bool   result;
+  double weight;
+
+  cut_SRE1_s()
+    : lhadaThing(),
+      name("SRE1"),
+      total(0),
+      dtotal(0),
+      hcount(0),
+      done(false),
+      result(false),
+      weight(1)
+  {
+    hcount = new TH1F(name.c_str(), "", 1, 0, 1);
+    hcount->SetCanExtend(1);
+    hcount->SetStats(0);
+
+    hcount->Fill("none", 0);
+    hcount->Fill("preselection", 0);
+    hcount->Fill("MET.PT > 150 and MET.PT < 225", 0);
+  }
+
   ~cut_SRE1_s() {}
+
   void summary()
   {
     printf("\t%-24s %10.3f (%10.3f)\n",
-           name.c_str(), count, sqrt(dcount));
+           name.c_str(), total, sqrt(dtotal));
   }
-  bool operator()(double weight=1)
+  void count(string c, double w=1)	{ hcount->Fill(c.c_str(), w); }
+  void write(outputFile& out)		{ out.file_->cd(); hcount->Write(); }
+  void reset()				{ done = false; result = false; }
+  bool operator()()	{ return apply(); }
+
+  bool apply()
   {
+    if ( done ) return result;
+    done   = true;
+    result = false;
+    count("none", weight);
+
     if ( !(cut_preselection()) ) return false;
+    count("preselection", weight);
+
     if ( !(MET("pt") > 150 && MET("pt") < 225) ) return false;
-    count  += weight;
-    dcount += weight * weight;
+    count("MET.PT > 150 and MET.PT < 225", weight);
+
+    total  += weight;
+    dtotal += weight * weight;
+    result  = true;
     return true;
   }
 } cut_SRE1;
@@ -500,14 +750,38 @@ int main(int argc, char** argv)
   // -------------------------------------------------------------------------
   DelphesAdapter adapter;
 
+  // cache pointers to filtered objects
+  vector<lhadaThing*> objects;
+  objects.push_back(&object_scalarHT);
+  objects.push_back(&object_photons);
+  objects.push_back(&object_muons);
+  objects.push_back(&object_jets);
+  objects.push_back(&object_MET);
+  objects.push_back(&object_electrons);
+  objects.push_back(&object_tightphotons);
+  objects.push_back(&object_cleanjets);
+  objects.push_back(&object_cleanelectrons);
+  objects.push_back(&object_jetsSR);
+  objects.push_back(&object_cleanmuons);
+
+  // cache pointers to cuts
+  vector<lhadaThing*> cuts;
+  cuts.push_back(&cut_preselection);
+  cuts.push_back(&cut_SRE2);
+  cuts.push_back(&cut_SRI1);
+  cuts.push_back(&cut_SRI2);
+  cuts.push_back(&cut_SRI3);
+  cuts.push_back(&cut_SRE1);
+
   // -------------------------------------------------------------------------
   // Loop over events
-  // ------------------------------------------------------------------
-
+  // -------------------------------------------------------------------------
   for(int entry=0; entry < nevents; entry++)
     {
       // read an event into event buffer
       ev.read(entry);
+
+      if ( entry % 10000 == 0 ) cout << entry << endl;
 
       // get external objects
       adapter(ev, "Delphes_Muon", 	Delphes_Muon);
@@ -517,43 +791,27 @@ int main(int argc, char** argv)
       adapter(ev, "Delphes_scalarHT", 	Delphes_scalarHT);
       adapter(ev, "Delphes_Photon", 	Delphes_Photon);
 
-      // create internal objects
-      object_scalarHT();
-      object_photons();
-      object_muons();
-      object_jets();
-      object_MET();
-      object_electrons();
-      object_tightphotons();
-      object_cleanjets();
-      object_cleanelectrons();
-      object_jetsSR();
-      object_cleanmuons();
+      // create filtered objects
+      for(size_t c=0; c < objects.size(); c++) objects[c]->create();
 
       // compute event level variables
       METoverSqrtSumET_	= METoverSqrtSumET(MET, scalarHT);
 
       // apply event level selections
-      cut_preselection();
-      cut_SRE2();
-      cut_SRI1();
-      cut_SRI2();
-      cut_SRI3();
-      cut_SRE1();
+      for(size_t c=0; c < cuts.size(); c++)
+        { 
+          cuts[c]->reset();
+          cuts[c]->apply();
+        }
+    }
 
-    }   
   // count summary
-  vector<lhadaThing*> cut;
-  cut.push_back(&cut_preselection);
-  cut.push_back(&cut_SRE2);
-  cut.push_back(&cut_SRI1);
-  cut.push_back(&cut_SRI2);
-  cut.push_back(&cut_SRI3);
-  cut.push_back(&cut_SRE1);
-
   std::cout << "event counts" << std::endl;
-  for(size_t c=0; c < cut.size(); c++)
-    cut[c]->summary();
+  for(size_t c=0; c < cuts.size(); c++)
+    {
+      cuts[c]->summary();
+      cuts[c]->write(of);
+    }   
 
   ev.close();
   of.close();

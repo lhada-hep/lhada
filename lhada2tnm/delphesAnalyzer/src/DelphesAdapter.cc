@@ -54,6 +54,18 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name,
 	  p.back().Value["charge"] = ev.Electron_Charge[c];	  
 	}      
     }
+  else if ( key.Contains("photon") )
+    {
+      for (size_t c=0; c < ev.Photon_PT.size(); c++)
+	{
+	  p.push_back(TEParticle(22,
+				 ev.Photon_PT[c],
+				 ev.Photon_Eta[c],
+				 ev.Photon_Phi[c],
+				 0));
+	  p.back().Value["charge"] = 0;
+	}      
+    }  
   else if ( key.Contains("jet") )
     {
       for (size_t c=0; c < ev.Jet_PT.size(); c++)
@@ -81,6 +93,11 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name,
 	  // p.back().Value["tau5"] = ev.Jet_Tau5[c];
 	  // p.back().Value["tautag"] = ev.Jet_TauTag[c];
 	}      
+    }
+  else
+    {
+      cout << "** DelphesAdapter ** unknown type: " << key << endl;
+      exit(0);
     }
 }
 
