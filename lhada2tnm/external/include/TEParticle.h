@@ -46,7 +46,7 @@ struct TEParticle : public TLorentzVector
   
   static int s_UID;
 
-  //ClassDef(TEParticle,0)
+  ClassDef(TEParticle,0)
 };
 std::ostream& operator<<(std::ostream& os, const TEParticle& o);
 

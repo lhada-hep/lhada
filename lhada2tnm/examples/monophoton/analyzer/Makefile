@@ -28,7 +28,7 @@ endif
 #-----------------------------------------------------------------------
 # sources and objects
 #-----------------------------------------------------------------------
-header  := $(incdir)/tnm.h
+header  := $(incdir)/tnm.h $(incdir)/analyzer_s.h
 linkdef := $(incdir)/linkdef.h
 cinthdr := $(srcdir)/dictionary.h
 cintsrc := $(srcdir)/dictionary.cc

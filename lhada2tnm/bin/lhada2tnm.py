@@ -6,10 +6,11 @@
 #                      keyword, better handling of mapping from vector<TEParticle>
 #                      to vector<TLorentzVector>
 #          14-May-2018 HBP add count histogram for each cut block
+#          16-May-2018 HBP completely decouple lhada analyzer from tnm
 #--------------------------------------------------------------------------------
 import sys, os, re, optparse, urllib
 from time import ctime
-from string import joinfields, split, replace, find, strip, lower
+from string import joinfields, split, replace, find, strip, lower, rstrip
 #--------------------------------------------------------------------------------
 DEBUG = 0
 
@@ -59,27 +60,26 @@ NAMES = {'name': 'analyzer',
              'aoddef': '',
              'aodimpl': '',
              'adapter': 'adapter',
-             'analysis': ''
+             'analyzer': 'analyzer'
              }
     
 SINGLETON_CACHE = set()
 
-# C++ TNM analyzer template
+# C++ LHADA analyzer template
 TEMPLATE_CC =\
 '''//---------------------------------------------------------------------------
-// File:        %(name)s.cc
+// File:        %(name)s_s.cc
 // Description: Analyzer for LHADA analysis:
 %(info)s
 // Created:     %(time)s by lhada2tnm.py
 //----------------------------------------------------------------------------
 #include <algorithm>
-#include "tnm.h"
-#include "TEParticle.h"
-#include "%(adaptername)s.h"
+#include "%(name)s_s.h"
 %(includes)s
 using namespace std;
 //----------------------------------------------------------------------------
-// The following functions, objects, and variables are globally visible.
+// The following functions, objects, and variables are globally visible
+// within this programming unit.
 //----------------------------------------------------------------------------
 %(fundef)s
 //----------------------------------------------------------------------------
@@ -89,6 +89,94 @@ using namespace std;
 //----------------------------------------------------------------------------
 %(cutdef)s
 //----------------------------------------------------------------------------
+%(name)s_s::%(name)s_s()
+{
+%(vobjects)s
+%(vcuts)s }
+
+%(name)s_s::~%(name)s_s() {}
+
+%(runargsimpl)s
+{
+  // copy to internal buffers
+%(copyargsimpl)s
+  // create filtered objects
+  for(size_t c=0; c < objects.size(); c++) objects[c]->create();
+    
+%(varimpl)s
+  // apply event level selections
+  for(size_t c=0; c < cuts.size(); c++)
+    { 
+      cuts[c]->reset();
+      cuts[c]->apply();
+    }
+}
+
+void %(name)s_s::summary(TFile* fout, ostream& os)
+{
+  os << std::endl << "Summary" << std::endl << std::endl;
+  for(size_t c=0; c < cuts.size(); c++)
+    {
+      cuts[c]->summary(os);
+      cuts[c]->write(fout);
+    }
+}
+'''
+
+# C++ LHADA analyzer header template
+TEMPLATE_HH =\
+'''#ifndef %(name)s_s_HH
+#define %(name)s_s_HH
+//---------------------------------------------------------------------
+// File:        %(name)s_s.h
+// Description: Analyzer for LHADA analysis:
+%(info)s
+// Created:     %(time)s by lhada2tnm.py
+//---------------------------------------------------------------------
+#include <algorithm>
+#include <iostream>
+#include "TFile.h"
+#include "TH1F.h"
+#include "TEParticle.h"
+//---------------------------------------------------------------------
+struct lhadaThing
+{
+  lhadaThing() {}
+  virtual ~lhadaThing() {}
+  virtual void reset() {}
+  virtual void create() {}
+  virtual bool apply() { return true; }
+  virtual void write(TFile* fout) {}
+  virtual void summary(std::ostream& os) {}
+};
+    
+struct %(name)s_s
+{
+  std::vector<lhadaThing*> objects;
+  std::vector<lhadaThing*> cuts;
+
+  %(name)s_s();
+  ~%(name)s_s();
+  void run(%(runargs)s);
+  void summary(TFile* fout, std::ostream& os);
+};
+#endif
+'''
+
+# C++ TNM analyzer template
+TNM_TEMPLATE_CC =\
+'''//---------------------------------------------------------------------
+// File:        %(name)s.cc
+// Description: Analyzer for LHADA analysis:
+%(info)s
+// Created:     %(time)s by lhada2tnm.py
+//---------------------------------------------------------------------
+#include "tnm.h"
+#include "%(adaptername)s.h"
+#include "%(name)s_s.h"
+
+using namespace std;
+//---------------------------------------------------------------------
 int main(int argc, char** argv)
 {
   // If you want canvases to be visible during program execution, just
@@ -119,21 +207,22 @@ int main(int argc, char** argv)
   // Create output file for histograms; see notes in header 
   outputFile of(cl.outputfilename);
 
-  // -------------------------------------------------------------------------
+  //---------------------------------------------------------------------
   // Define histograms
-  // -------------------------------------------------------------------------
+  //---------------------------------------------------------------------
   //setStyle();
 
-  // -------------------------------------------------------------------------
-  // Create an appropriate event adapter
-  // -------------------------------------------------------------------------
+  //---------------------------------------------------------------------
+  // Create an event adapter to map input types to a standard internal 
+  // type and create the analyzer
+  //---------------------------------------------------------------------
   %(adaptername)s %(adapter)s;
 
-%(vobjects)s
-%(vcuts)s
-  // -------------------------------------------------------------------------
+  %(name)s_s %(analyzer)s;
+
+  //---------------------------------------------------------------------
   // Loop over events
-  // -------------------------------------------------------------------------
+  //---------------------------------------------------------------------
   for(int entry=0; entry < nevents; entry++)
     {
       // read an event into event buffer
@@ -142,25 +231,11 @@ int main(int argc, char** argv)
       if ( entry %(percent)s 10000 == 0 ) cout << entry << endl;
 
 %(extobjimpl)s
-      // create filtered objects
-      for(size_t c=0; c < objects.size(); c++) objects[c]->create();
-
-%(varimpl)s
-      // apply event level selections
-      for(size_t c=0; c < cuts.size(); c++)
-        { 
-          cuts[c]->reset();
-          cuts[c]->apply();
-        }
+%(runimpl)s
     }
 
-  // count summary
-  cout << "Summary" << endl << endl;
-  for(size_t c=0; c < cuts.size(); c++)
-    {
-      cuts[c]->summary();
-      cuts[c]->write(of);
-    }   
+  // summarize analysis
+  %(analyzer)s.summary(of.file_, cout);
 
   ev.close();
   of.close();
@@ -168,13 +243,13 @@ int main(int argc, char** argv)
 }
 '''
 #--------------------------------------------------------------------------------
-VERSION = 'v1.0.0'
+VERSION = 'v1.0.1'
 USAGE ='''
     Usage:
        lhada2tnm.py [options] LHADA-file-name
 
     Options:
-    -a name of analyzer to be created [delphesAnalyzer]
+    -a name of analyzer to be created [analyzer]
     -e name of event adapter          [DelphesAdapter]
     -t name of TNM ROOT tree          [Delphes]
     '''
@@ -186,7 +261,7 @@ def decodeCommandLine():
                       action="store",
                       dest="name",
                       type="string",
-                      default='delphesAnalyzer',
+                      default=NAMES['analyzer'],
                       help="name of analyzer to be created")
 
     parser.add_option("-e", "--eventadapter",
@@ -1047,8 +1122,8 @@ def process_objects(names, blocks, blocktypes):
     intobjdef = ''
     extobj = set()
 
-    vobjects  = '%s// cache pointers to filtered objects\n' % tab2    
-    vobjects += '%svector<lhadaThing*> objects;\n' % tab2
+    vobjects  = '%s// cache pointers to filtered objects\n' % tab2
+    vobjects += '%sobjects.clear();\n' % tab2
 
     for name, words, records in blocks['object']:
         if DEBUG > 0:
@@ -1083,25 +1158,48 @@ def process_objects(names, blocks, blocktypes):
 // internal objects
 %s
 ''' % (extobjdef, intobjdef)
+
+    # -------------------------------------------------------
+    runimpl     = '      %(analyzer)s.run(' % names
+    runtab      = ' '*len(runimpl)
     
-    extobjimpl = '%s// get external objects\n' % tab6
-    adapter = names['adapter']
+    runargs     = ''
+    runargsimpl = 'void %(name)s_s::run(' % names
+    
+    bigtab      = ' '*len(runargsimpl)
+    smalltab    = ' '*len('  void run')+' '
+
+    adapter     = names['adapter']
+    copyargsimpl= ''
+    extobjimpl  = '\n%s// map external objects to internal ones\n' % tab6
     for name in extobj:
-        extobjimpl += '%s%s(ev, "%s", \t%s);\n' % (tab6, adapter, name, name)
+        singleton = single.findall(lower(name)) != []
+        if singleton:
+            rtype = 'TEParticle'
+        else:
+            rtype = 'std::vector<TEParticle>'        
+        extobjimpl  += '%s%s %s;\n' % (tab6, rtype, name)
+
+        rtype = rtype + '&'
+        runargsimpl += '%s %s_,\n%s' % (rtype, name, bigtab)
+        runargs     += '%s %s_,\n%s' % (rtype, name, smalltab)
+        runimpl     += '%s,\n%s'  % (name, runtab)
+
+        extobjimpl  += '%s%s(ev, "%s", \t%s);\n' % (tab6, adapter, name, name)
+        copyargsimpl+= '  %s\t= %s_;\n' % (name, name)
+        
+    runimpl     = rstrip(runimpl)[:-1] + ');\n'
+    runargs     = rstrip(runargs)[:-1]
+    runargsimpl = rstrip(runargsimpl)[:-1] + ')\n'
  
+
+    names['runimpl']     = runimpl
+    names['runargs']     = runargs
+    names['runargsimpl'] = runargsimpl
+    names['copyargsimpl']= copyargsimpl
+    
     # implement object selections
     objdef += '\n// object definitions\n'
-    objdef += 'struct lhadaThing\n'
-    objdef += '{\n'
-    objdef += '  lhadaThing() {}\n'
-    objdef += '  ~lhadaThing() {}\n'
-    objdef += '  virtual void reset() {}\n'
-    objdef += '  virtual void create() {}\n'
-    objdef += '  virtual bool apply() { return true; }\n'
-    objdef += '  virtual void write(outputFile& out) {}\n'
-    objdef += '  virtual void summary() {}\n'
-    objdef += '};\n\n'
-    
     for name, words, records in blocks['object']:
         objdef += 'struct object_%s_s : public lhadaThing\n' % name
         objdef += '{\n'
@@ -1126,9 +1224,10 @@ def process_objects(names, blocks, blocktypes):
 def process_variables(names, blocks):
     if DEBUG > 0:
         print '\nBEGIN( process_variables )'
-            
+
+    tab2 = ' '*2
     vardef  = '// variables\n'
-    varimpl = '%s// compute event level variables\n' % SPACE6
+    varimpl = '%s// compute event level variables\n' % tab2
     for name, words, records in blocks['variable']:
         if DEBUG > 0:
             print 'VARIABLE( %s )' % name
@@ -1152,7 +1251,7 @@ def process_variables(names, blocks):
                 rtype, intname, extname, argtypes = blocks['function_info'][fname]
                 func = replace(func, fname, intname)
                 vardef  += '%s\t%s;\n' % (rtype, name)
-                varimpl += '%s%s\t= %s;\n' % (SPACE6, name, func)
+                varimpl += '%s%s\t= %s;\n' % (tab2, name, func)
                 
     names['vardef']  = vardef
     names['varimpl'] = varimpl
@@ -1163,7 +1262,8 @@ def process_cuts(names, blocks, blocktypes):
             
     cutdef  = '// selections\n'
     vcuts   = '  // cache pointers to cuts\n'
-    vcuts  += '  vector<lhadaThing*> cuts;\n'
+    vcuts  += '  cuts.clear();\n'
+    #vcuts  += '  vector<lhadaThing*> cuts;\n'
     for name, words, records in blocks['cut']:    
         vcuts += '  cuts.push_back(&cut_%s);\n' % name
     
@@ -1219,9 +1319,9 @@ def process_cuts(names, blocks, blocktypes):
             cutdef += '    hcount->Fill("%s", 0);\n' % nip.sub('', value)        
         cutdef += '  }\n\n'
         cutdef += '  ~cut_%s_s() {}\n\n' % name
-        cutdef += '''  void summary()
+        cutdef += '''  void summary(std::ostream& os)
   {
-    cout << name << endl;
+    os << name << std::endl;
     double gtotal = hcount->GetBinContent(1);
     for(int c=0; c <= ncuts; c++)
       {
@@ -1229,15 +1329,20 @@ def process_cuts(names, blocks, blocktypes):
         double error(hcount->GetBinError(c+1));
         double efficiency=0;
         if ( gtotal > 0 ) efficiency = value/gtotal;
-        printf(" %(percent)s2d %(percent)s-45s: %(percent)s9.2f +/- %(percent)s5.1f %(percent)s6.3f\\n",
-               c+1, hcount->GetXaxis()->GetBinLabel(c+1), value, error, efficiency);
+        char record[1024];
+        sprintf(record, 
+                " %(percent)s2d %(percent)s-45s:"
+                " %(percent)s9.2f +/- %(percent)s5.1f %(percent)s6.3f",
+                c+1, hcount->GetXaxis()->GetBinLabel(c+1), 
+                value, error, efficiency);
+        os << record << std::endl;
       }
-    cout << endl;
+    os << std::endl;
   }
 ''' % {'percent': '%'}
         
         cutdef += '  void count(string c)\t\t{ hcount->Fill(c.c_str(), weight); }\n'
-        cutdef += '  void write(outputFile& out)\t{ out.file_->cd(); hcount->Write(); }\n'
+        cutdef += '  void write(TFile* fout)\t{ fout->cd(); hcount->Write(); }\n'
         cutdef += '  void reset()\t\t\t{ done = false; result = false; }\n'
         cutdef += '  bool operator()()\t\t{ return apply(); }\n\n'     
         cutdef += '  bool apply()\n'
@@ -1276,7 +1381,6 @@ def main():
     names['objdef']   = ''
     names['vardef']   = ''
     names['aodimpl']  = ''
-    names['analysis'] = ''
     names['percent']  = '%'
     blocks = extractBlocks(filename)
 
@@ -1300,10 +1404,51 @@ def main():
 
     process_cuts(names,      blocks, blocktypes)
     
-    # write out C++ function
+    # write out C++ code
+
+    os.system('mkdir -p src; mkdir -p include')
     
     record = TEMPLATE_CC % names
+    open('src/%(name)s_s.cc' % names, 'w').write(record)
+
+    record = TEMPLATE_HH % names
+    open('include/%(name)s_s.h' % names, 'w').write(record)
+
+    record = TNM_TEMPLATE_CC % names
     open('%(name)s.cc' % names, 'w').write(record)
+
+
+    # update linkdef
+    linkdef = strip(os.popen('find * -name "linkdef*"').read())
+    if linkdef != '':
+        names['linkdef'] = linkdef
+        record = strip(os.popen('grep %(name)s_s %(linkdef)s' % names).read())
+        if record == '':
+            print 'update linkdef'
+            record = strip(open(linkdef).read())
+            records= split(record, '\n')[:-1]
+            records.append('#pragma link C++ class lhadaThing;' % names)
+            records.append('#pragma link C++ class %(name)s_s;' % names)            
+            records.append('#pragma link C++ class TEParticle;' % names)
+            records.append('#pragma link C++ class vector<TEParticle>;' % names)
+            records.append('')
+            records.append('#endif')
+            record = joinfields(records, '\n')
+            open(linkdef, 'w').write(record)
+
+
+    # update Makefile
+    makefile = strip(os.popen('find * -name "Makefile*"').read())
+    if makefile != '':
+        names['makefile'] = makefile
+        record = strip(os.popen('grep %(name)s_s %(makefile)s' % names).read())
+        if record == '':
+            print 'update Makefile'
+            names['makefile'] = makefile
+            record = strip(open(makefile).read())
+            tnm    = re.compile('tnm.h.*$', re.M)
+            record = tnm.sub('tnm.h $(incdir)/%(name)s_s.h' % names, record)
+            open(makefile, 'w').write(record)            
 #--------------------------------------------------------------------------------        
 try:
     main()
