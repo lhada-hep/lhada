@@ -4,7 +4,7 @@
 // File:        analyzer_s.h
 // Description: Analyzer for LHADA analysis:
 //
-// LHADA file: ../../../doc/ATLASSUSY1605.03814.lhada
+// LHADA file: ../../../doc/ATLASSUSY1605.03814_lhproc.lhada
 // info block
 //	experiment  	ATLAS
 //	id          	SUSY-2013-15
@@ -15,7 +15,7 @@
 //	hepdata     	http://hepdata.cedar.ac.uk/view/ins1304456
 //	doi         	10.1140/epjc/s10052-016-4184-8
 //
-// Created:     Thu May 17 09:14:18 2018 by lhada2tnm.py
+// Created:     Fri May 18 15:33:25 2018 by lhada2tnm.py
 //---------------------------------------------------------------------
 #include <algorithm>
 #include <iostream>

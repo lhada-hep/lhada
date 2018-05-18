@@ -2,7 +2,7 @@
 // File:        analyzer_s.cc
 // Description: Analyzer for LHADA analysis:
 //
-// LHADA file: ../../../doc/ATLASSUSY1605.03814.lhada
+// LHADA file: ../../../doc/ATLASSUSY1605.03814_lhproc.lhada
 // info block
 //	experiment  	ATLAS
 //	id          	SUSY-2013-15
@@ -13,7 +13,7 @@
 //	hepdata     	http://hepdata.cedar.ac.uk/view/ins1304456
 //	doi         	10.1140/epjc/s10052-016-4184-8
 //
-// Created:     Thu May 17 09:14:18 2018 by lhada2tnm.py
+// Created:     Fri May 18 15:33:25 2018 by lhada2tnm.py
 //----------------------------------------------------------------------------
 #include <algorithm>
 #include "analyzer_s.h"
@@ -30,7 +30,7 @@ inline
 double	_dphijNjle3METmin(vector<TEParticle>& jetsSR, TLorentzVector& MET)
 {
   vector<TLorentzVector> jetsSR_(jetsSR.size());
-  copy(jetsSR.begin(), jetsSR.begin(), jetsSR_.begin());
+  copy(jetsSR.begin(), jetsSR.end(), jetsSR_.begin());
   return dphijNjle3METmin(jetsSR_, MET);
 };
 
@@ -38,7 +38,7 @@ inline
 double	_aplanarity(vector<TEParticle>& jetsSR)
 {
   vector<TLorentzVector> jetsSR_(jetsSR.size());
-  copy(jetsSR.begin(), jetsSR.begin(), jetsSR_.begin());
+  copy(jetsSR.begin(), jetsSR.end(), jetsSR_.begin());
   return aplanarity(jetsSR_);
 };
 
@@ -46,7 +46,7 @@ inline
 double	_dphijNjgt3METmin(vector<TEParticle>& jetsSR, TLorentzVector& MET)
 {
   vector<TLorentzVector> jetsSR_(jetsSR.size());
-  copy(jetsSR.begin(), jetsSR.begin(), jetsSR_.begin());
+  copy(jetsSR.begin(), jetsSR.end(), jetsSR_.begin());
   return dphijNjgt3METmin(jetsSR_, MET);
 };
 
@@ -54,7 +54,7 @@ inline
 double	_Meff(vector<TEParticle>& jetsSR, TLorentzVector& MET)
 {
   vector<TLorentzVector> jetsSR_(jetsSR.size());
-  copy(jetsSR.begin(), jetsSR.begin(), jetsSR_.begin());
+  copy(jetsSR.begin(), jetsSR.end(), jetsSR_.begin());
   return Meff(jetsSR_, MET);
 };
 
@@ -62,7 +62,7 @@ inline
 double	_METovermeffNJ(vector<TEParticle>& jetsSR, int njets, TLorentzVector& MET)
 {
   vector<TLorentzVector> jetsSR_(jetsSR.size());
-  copy(jetsSR.begin(), jetsSR.begin(), jetsSR_.begin());
+  copy(jetsSR.begin(), jetsSR.end(), jetsSR_.begin());
   return METovermeffNJ(jetsSR_, njets, MET);
 };
 
@@ -76,7 +76,7 @@ inline
 double	_METoversqrtHT(vector<TEParticle>& jetsSR, TLorentzVector& MET)
 {
   vector<TLorentzVector> jetsSR_(jetsSR.size());
-  copy(jetsSR.begin(), jetsSR.begin(), jetsSR_.begin());
+  copy(jetsSR.begin(), jetsSR.end(), jetsSR_.begin());
   return METoversqrtHT(jetsSR_, MET);
 };
 
@@ -130,7 +130,6 @@ struct object_muons_s : public lhadaThing
         TEParticle& p = Delphes_Muon[c];
         if ( !(p("pt") > 10) ) continue;
         if ( !(p("|eta|") < 2.7) ) continue;
-        if ( !(p("isolationvarrhocorr") < 0.1) ) continue;
         muons.push_back(p);
       }
   };
@@ -350,7 +349,7 @@ struct cut_preselection_s : public lhadaThing
       done(false),
       result(false),
       weight(1),
-      ncuts(2)
+      ncuts(4)
   {
     hcount = new TH1F("cutflow_preselection", "", 1, 0, 1);
     hcount->SetCanExtend(1);
@@ -359,6 +358,8 @@ struct cut_preselection_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("MET.PT > 200", 0);
+    hcount->Fill("cleanmuons.size == 0", 0);
+    hcount->Fill("verycleanelectrons.size == 0", 0);
     hcount->Fill("jetsSR.size > 0", 0);
   }
 
@@ -398,6 +399,12 @@ struct cut_preselection_s : public lhadaThing
 
     if ( !(MET("pt") > 200) ) return false;
     count("MET.PT > 200");
+
+    if ( !(cleanmuons.size() == 0) ) return false;
+    count("cleanmuons.size == 0");
+
+    if ( !(verycleanelectrons.size() == 0) ) return false;
+    count("verycleanelectrons.size == 0");
 
     if ( !(jetsSR.size() > 0) ) return false;
     count("jetsSR.size > 0");
@@ -441,10 +448,10 @@ struct cut_2jt_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("jetsSR.size >= 2", 0);
     hcount->Fill("jetsSR[0].PT > 200", 0);
-    hcount->Fill("jetsSR[1].PT > 200", 0);
+    hcount->Fill("jetsSR.size >= 2", 0);
     hcount->Fill("dphijNjle3METmin > 0.8", 0);
+    hcount->Fill("jetsSR[1].PT > 200", 0);
     hcount->Fill("METoversqrtHT > 20", 0);
     hcount->Fill("Meff > 2000", 0);
   }
@@ -486,17 +493,17 @@ struct cut_2jt_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
-    if ( !(jetsSR.size() >= 2) ) return false;
-    count("jetsSR.size >= 2");
-
     if ( !(jetsSR[0]("pt") > 200) ) return false;
     count("jetsSR[0].PT > 200");
 
-    if ( !(jetsSR[1]("pt") > 200) ) return false;
-    count("jetsSR[1].PT > 200");
+    if ( !(jetsSR.size() >= 2) ) return false;
+    count("jetsSR.size >= 2");
 
     if ( !(dphijNjle3METmin_ > 0.8) ) return false;
     count("dphijNjle3METmin > 0.8");
+
+    if ( !(jetsSR[1]("pt") > 200) ) return false;
+    count("jetsSR[1].PT > 200");
 
     if ( !(METoversqrtHT_ > 20) ) return false;
     count("METoversqrtHT > 20");
@@ -543,10 +550,10 @@ struct cut_2jm_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("jetsSR.size >= 2", 0);
     hcount->Fill("jetsSR[0].PT > 300", 0);
-    hcount->Fill("jetsSR[1].PT > 50", 0);
+    hcount->Fill("jetsSR.size >= 2", 0);
     hcount->Fill("dphijNjle3METmin > 0.4", 0);
+    hcount->Fill("jetsSR[1].PT > 50", 0);
     hcount->Fill("METoversqrtHT > 15", 0);
     hcount->Fill("Meff > 1600", 0);
   }
@@ -588,17 +595,17 @@ struct cut_2jm_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
-    if ( !(jetsSR.size() >= 2) ) return false;
-    count("jetsSR.size >= 2");
-
     if ( !(jetsSR[0]("pt") > 300) ) return false;
     count("jetsSR[0].PT > 300");
 
-    if ( !(jetsSR[1]("pt") > 50) ) return false;
-    count("jetsSR[1].PT > 50");
+    if ( !(jetsSR.size() >= 2) ) return false;
+    count("jetsSR.size >= 2");
 
     if ( !(dphijNjle3METmin_ > 0.4) ) return false;
     count("dphijNjle3METmin > 0.4");
+
+    if ( !(jetsSR[1]("pt") > 50) ) return false;
+    count("jetsSR[1].PT > 50");
 
     if ( !(METoversqrtHT_ > 15) ) return false;
     count("METoversqrtHT > 15");
@@ -645,10 +652,10 @@ struct cut_2jl_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("jetsSR.size >= 2", 0);
     hcount->Fill("jetsSR[0].PT > 200", 0);
-    hcount->Fill("jetsSR[1].PT > 200", 0);
+    hcount->Fill("jetsSR.size >= 2", 0);
     hcount->Fill("dphijNjle3METmin > 0.8", 0);
+    hcount->Fill("jetsSR[1].PT > 200", 0);
     hcount->Fill("METoversqrtHT > 15", 0);
     hcount->Fill("Meff > 1200", 0);
   }
@@ -690,17 +697,17 @@ struct cut_2jl_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
-    if ( !(jetsSR.size() >= 2) ) return false;
-    count("jetsSR.size >= 2");
-
     if ( !(jetsSR[0]("pt") > 200) ) return false;
     count("jetsSR[0].PT > 200");
 
-    if ( !(jetsSR[1]("pt") > 200) ) return false;
-    count("jetsSR[1].PT > 200");
+    if ( !(jetsSR.size() >= 2) ) return false;
+    count("jetsSR.size >= 2");
 
     if ( !(dphijNjle3METmin_ > 0.8) ) return false;
     count("dphijNjle3METmin > 0.8");
+
+    if ( !(jetsSR[1]("pt") > 200) ) return false;
+    count("jetsSR[1].PT > 200");
 
     if ( !(METoversqrtHT_ > 15) ) return false;
     count("METoversqrtHT > 15");
@@ -747,15 +754,15 @@ struct cut_6jt_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("jetsSR.size >= 6", 0);
     hcount->Fill("jetsSR[0].PT > 200", 0);
+    hcount->Fill("jetsSR.size >= 6", 0);
+    hcount->Fill("dphijNjle3METmin > 0.4", 0);
+    hcount->Fill("dphijNjgt3METmin > 0.2", 0);
     hcount->Fill("jetsSR[1].PT > 100", 0);
     hcount->Fill("jetsSR[2].PT > 100", 0);
     hcount->Fill("jetsSR[3].PT > 100", 0);
     hcount->Fill("jetsSR[4].PT > 50", 0);
     hcount->Fill("jetsSR[5].PT > 50", 0);
-    hcount->Fill("dphijNjle3METmin > 0.4", 0);
-    hcount->Fill("dphijNjgt3METmin > 0.2", 0);
     hcount->Fill("aplanarity > 0.04", 0);
     hcount->Fill("METovermeff6j > 0.2", 0);
     hcount->Fill("Meff > 2000", 0);
@@ -798,11 +805,17 @@ struct cut_6jt_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
+    if ( !(jetsSR[0]("pt") > 200) ) return false;
+    count("jetsSR[0].PT > 200");
+
     if ( !(jetsSR.size() >= 6) ) return false;
     count("jetsSR.size >= 6");
 
-    if ( !(jetsSR[0]("pt") > 200) ) return false;
-    count("jetsSR[0].PT > 200");
+    if ( !(dphijNjle3METmin_ > 0.4) ) return false;
+    count("dphijNjle3METmin > 0.4");
+
+    if ( !(dphijNjgt3METmin_ > 0.2) ) return false;
+    count("dphijNjgt3METmin > 0.2");
 
     if ( !(jetsSR[1]("pt") > 100) ) return false;
     count("jetsSR[1].PT > 100");
@@ -818,12 +831,6 @@ struct cut_6jt_s : public lhadaThing
 
     if ( !(jetsSR[5]("pt") > 50) ) return false;
     count("jetsSR[5].PT > 50");
-
-    if ( !(dphijNjle3METmin_ > 0.4) ) return false;
-    count("dphijNjle3METmin > 0.4");
-
-    if ( !(dphijNjgt3METmin_ > 0.2) ) return false;
-    count("dphijNjgt3METmin > 0.2");
 
     if ( !(aplanarity_ > 0.04) ) return false;
     count("aplanarity > 0.04");
@@ -873,15 +880,15 @@ struct cut_6jm_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("jetsSR.size >= 6", 0);
     hcount->Fill("jetsSR[0].PT > 200", 0);
+    hcount->Fill("jetsSR.size >= 6", 0);
+    hcount->Fill("dphijNjle3METmin > 0.4", 0);
+    hcount->Fill("dphijNjgt3METmin > 0.2", 0);
     hcount->Fill("jetsSR[1].PT > 100", 0);
     hcount->Fill("jetsSR[2].PT > 100", 0);
     hcount->Fill("jetsSR[3].PT > 100", 0);
     hcount->Fill("jetsSR[4].PT > 50", 0);
     hcount->Fill("jetsSR[5].PT > 50", 0);
-    hcount->Fill("dphijNjle3METmin > 0.4", 0);
-    hcount->Fill("dphijNjgt3METmin > 0.2", 0);
     hcount->Fill("aplanarity > 0.04", 0);
     hcount->Fill("METovermeff6j > 0.25", 0);
     hcount->Fill("Meff > 1600", 0);
@@ -924,11 +931,17 @@ struct cut_6jm_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
+    if ( !(jetsSR[0]("pt") > 200) ) return false;
+    count("jetsSR[0].PT > 200");
+
     if ( !(jetsSR.size() >= 6) ) return false;
     count("jetsSR.size >= 6");
 
-    if ( !(jetsSR[0]("pt") > 200) ) return false;
-    count("jetsSR[0].PT > 200");
+    if ( !(dphijNjle3METmin_ > 0.4) ) return false;
+    count("dphijNjle3METmin > 0.4");
+
+    if ( !(dphijNjgt3METmin_ > 0.2) ) return false;
+    count("dphijNjgt3METmin > 0.2");
 
     if ( !(jetsSR[1]("pt") > 100) ) return false;
     count("jetsSR[1].PT > 100");
@@ -944,12 +957,6 @@ struct cut_6jm_s : public lhadaThing
 
     if ( !(jetsSR[5]("pt") > 50) ) return false;
     count("jetsSR[5].PT > 50");
-
-    if ( !(dphijNjle3METmin_ > 0.4) ) return false;
-    count("dphijNjle3METmin > 0.4");
-
-    if ( !(dphijNjgt3METmin_ > 0.2) ) return false;
-    count("dphijNjgt3METmin > 0.2");
 
     if ( !(aplanarity_ > 0.04) ) return false;
     count("aplanarity > 0.04");
@@ -999,14 +1006,14 @@ struct cut_5j_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("jetsSR.size >= 5", 0);
     hcount->Fill("jetsSR[0].PT > 200", 0);
+    hcount->Fill("jetsSR.size >= 5", 0);
+    hcount->Fill("dphijNjle3METmin > 0.4", 0);
+    hcount->Fill("dphijNjgt3METmin > 0.2", 0);
     hcount->Fill("jetsSR[1].PT > 100", 0);
     hcount->Fill("jetsSR[2].PT > 100", 0);
     hcount->Fill("jetsSR[3].PT > 100", 0);
     hcount->Fill("jetsSR[4].PT > 50", 0);
-    hcount->Fill("dphijNjle3METmin > 0.4", 0);
-    hcount->Fill("dphijNjgt3METmin > 0.2", 0);
     hcount->Fill("aplanarity > 0.04", 0);
     hcount->Fill("METovermeff5j > 0.25", 0);
     hcount->Fill("Meff > 1600", 0);
@@ -1049,11 +1056,17 @@ struct cut_5j_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
+    if ( !(jetsSR[0]("pt") > 200) ) return false;
+    count("jetsSR[0].PT > 200");
+
     if ( !(jetsSR.size() >= 5) ) return false;
     count("jetsSR.size >= 5");
 
-    if ( !(jetsSR[0]("pt") > 200) ) return false;
-    count("jetsSR[0].PT > 200");
+    if ( !(dphijNjle3METmin_ > 0.4) ) return false;
+    count("dphijNjle3METmin > 0.4");
+
+    if ( !(dphijNjgt3METmin_ > 0.2) ) return false;
+    count("dphijNjgt3METmin > 0.2");
 
     if ( !(jetsSR[1]("pt") > 100) ) return false;
     count("jetsSR[1].PT > 100");
@@ -1066,12 +1079,6 @@ struct cut_5j_s : public lhadaThing
 
     if ( !(jetsSR[4]("pt") > 50) ) return false;
     count("jetsSR[4].PT > 50");
-
-    if ( !(dphijNjle3METmin_ > 0.4) ) return false;
-    count("dphijNjle3METmin > 0.4");
-
-    if ( !(dphijNjgt3METmin_ > 0.2) ) return false;
-    count("dphijNjgt3METmin > 0.2");
 
     if ( !(aplanarity_ > 0.04) ) return false;
     count("aplanarity > 0.04");
@@ -1121,13 +1128,13 @@ struct cut_4jt_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("jetsSR.size >= 4", 0);
     hcount->Fill("jetsSR[0].PT > 200", 0);
+    hcount->Fill("jetsSR.size >= 4", 0);
+    hcount->Fill("dphijNjle3METmin > 0.4", 0);
+    hcount->Fill("dphijNjgt3METmin > 0.2", 0);
     hcount->Fill("jetsSR[1].PT > 100", 0);
     hcount->Fill("jetsSR[2].PT > 100", 0);
     hcount->Fill("jetsSR[3].PT > 100", 0);
-    hcount->Fill("dphijNjle3METmin > 0.4", 0);
-    hcount->Fill("dphijNjgt3METmin > 0.2", 0);
     hcount->Fill("aplanarity > 0.04", 0);
     hcount->Fill("METovermeff4j > 0.2", 0);
     hcount->Fill("Meff > 2200", 0);
@@ -1170,11 +1177,17 @@ struct cut_4jt_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
+    if ( !(jetsSR[0]("pt") > 200) ) return false;
+    count("jetsSR[0].PT > 200");
+
     if ( !(jetsSR.size() >= 4) ) return false;
     count("jetsSR.size >= 4");
 
-    if ( !(jetsSR[0]("pt") > 200) ) return false;
-    count("jetsSR[0].PT > 200");
+    if ( !(dphijNjle3METmin_ > 0.4) ) return false;
+    count("dphijNjle3METmin > 0.4");
+
+    if ( !(dphijNjgt3METmin_ > 0.2) ) return false;
+    count("dphijNjgt3METmin > 0.2");
 
     if ( !(jetsSR[1]("pt") > 100) ) return false;
     count("jetsSR[1].PT > 100");
@@ -1184,12 +1197,6 @@ struct cut_4jt_s : public lhadaThing
 
     if ( !(jetsSR[3]("pt") > 100) ) return false;
     count("jetsSR[3].PT > 100");
-
-    if ( !(dphijNjle3METmin_ > 0.4) ) return false;
-    count("dphijNjle3METmin > 0.4");
-
-    if ( !(dphijNjgt3METmin_ > 0.2) ) return false;
-    count("dphijNjgt3METmin > 0.2");
 
     if ( !(aplanarity_ > 0.04) ) return false;
     count("aplanarity > 0.04");

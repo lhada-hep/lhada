@@ -16,11 +16,11 @@ double Meff(std::vector<TLorentzVector>& jets, TLorentzVector& MET) {
 double dphijNjle3METmin(std::vector<TLorentzVector>& jets, TLorentzVector& MET) {
   if (jets.size() < 2)
     return 0;
-  int njets = 3;
-  if (jets.size() == (size_t)2) njets = 2;
+  int njets = jets.size();
+  if ( njets > 3 ) njets = 3;
   double dphimin = 999;
   for (int i=0; i<njets; i++) {
-    double dphi = MET.DeltaPhi(jets[i]);
+    double dphi = fabs(MET.DeltaPhi(jets[i]));
     if (dphi < dphimin) dphimin = dphi;
   }
   return dphimin;
@@ -31,7 +31,7 @@ double dphijNjgt3METmin(std::vector<TLorentzVector>& jets, TLorentzVector& MET) 
   if (jets.size() <= (size_t)3) 
     return 0;
   for (size_t i=0; i<jets.size(); i++) {
-    double dphi = MET.DeltaPhi(jets[i]);
+    double dphi = fabs(MET.DeltaPhi(jets[i]));
     if (dphi < dphimin) dphimin = dphi;
   }
   return dphimin;
@@ -65,15 +65,16 @@ double aplanarity(std::vector<TLorentzVector>& jets) {
 
 double dPhi(double phi1, double phi2)
 {
-  double deltaphi = phi2 - phi1;
-  if ( fabs(deltaphi) > M_PI ) deltaphi = 2 * M_PI - fabs(deltaphi);
+  double deltaphi = fabs(phi2 - phi1);
+  if ( deltaphi > M_PI ) deltaphi = 2 * M_PI - deltaphi;
   return deltaphi;
 }
 
 double dR(double eta1, double phi1, double eta2, double phi2)
 {
   double deltaeta = eta1 - eta2;
-  double deltaphi = dPhi(phi1, phi2);
+  double deltaphi = fabs(phi2 - phi1);
+  if ( deltaphi > M_PI ) deltaphi = 2 * M_PI - deltaphi;
   return sqrt(deltaeta*deltaeta + deltaphi*deltaphi);
 }
 

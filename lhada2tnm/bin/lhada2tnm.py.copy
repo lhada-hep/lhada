@@ -7,6 +7,7 @@
 #                      to vector<TLorentzVector>
 #          14-May-2018 HBP add count histogram for each cut block
 #          16-May-2018 HBP completely decouple lhada analyzer from tnm
+#          18-May-2018 HBP fix bug process_functions
 #--------------------------------------------------------------------------------
 import sys, os, re, optparse, urllib
 from time import ctime
@@ -611,7 +612,12 @@ def printBlocks(blocks):
 def process_info(names, blocks):
     info = '//\n// LHADA file: %(filename)s\n' % names
     info+= '// info block\n'
+
+    if not blocks.has_key('info'):
+        boohoo("Thou lump of foul deformity. I can't find info block!")
+
     name, words, body = blocks['info'][0]
+    
     for record in body:
         t = split(record)
         record = '//\t%-12s\t%s\n' % (t[0], joinfields(t[1:], ' '))
@@ -622,7 +628,9 @@ def process_info(names, blocks):
 def process_functions(names, blocks):
     if DEBUG > 0:
         print '\nBEGIN( process_function )'
-        
+
+    if not blocks.has_key('function'): return
+
     # extract headers to be included
     includeset = set()
     for name, words, records in blocks['function']:
@@ -728,7 +736,7 @@ expected arguments %s, but %s found in LHADA file
                             copyvars+='\n'
                             copyvars+='  vector<TLorentzVector> %s(%s.size());\n'\
                               % (argc, arg)
-                            copyvars+='  copy(%s.begin(), %s.begin(), %s.begin());'\
+                            copyvars+='  copy(%s.begin(), %s.end(), %s.begin());'\
                               % (arg, arg, argc)
                             argtypes[ii] = 'vector<TEParticle>&'
                             
@@ -952,7 +960,7 @@ def convert2cpp(record, btype, blocktypes):
 def process_singleton_object(name, records, tab, blocktypes):
     if DEBUG > 0:
         print '\nBEGIN( process_singleton_object ) %s' % name
-            
+                    
     objdef = ''
     for record in records:
         t = split(record)
@@ -1111,7 +1119,9 @@ perhaps you're missing a return value in:
 def process_objects(names, blocks, blocktypes):
     if DEBUG > 0:
         print '\nBEGIN( process_objects )'
-            
+
+    if not blocks.has_key('object'): return  ''
+        
     from string import lower
     tab2 = ' '*2
     tab4 = ' '*4
@@ -1225,6 +1235,8 @@ def process_variables(names, blocks):
     if DEBUG > 0:
         print '\nBEGIN( process_variables )'
 
+    if not blocks.has_key('variable'): return  ''
+        
     tab2 = ' '*2
     vardef  = '// variables\n'
     varimpl = '%s// compute event level variables\n' % tab2
@@ -1259,7 +1271,10 @@ def process_variables(names, blocks):
 def process_cuts(names, blocks, blocktypes):
     if DEBUG > 0:
         print '\nBEGIN( process_cuts )'
-            
+
+    if not blocks.has_key('cut'):
+        names['cutdef'] = ''
+        
     cutdef  = '// selections\n'
     vcuts   = '  // cache pointers to cuts\n'
     vcuts  += '  cuts.clear();\n'
@@ -1393,7 +1408,7 @@ def main():
 
     if DEBUG > 0:
         printBlocks(blocks)
-    
+
     process_info(names,      blocks)
     
     process_functions(names, blocks)

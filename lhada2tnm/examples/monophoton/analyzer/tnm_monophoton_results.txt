@@ -24,49 +24,49 @@ lhprocsel
   2 MET.PT > 150                                 : 117870.00 +/- 343.3  0.786
   3 tightphotons.size > 0                        :  93341.00 +/- 305.5  0.622
   4 tightphotons[0].PT > 150                     :  81688.00 +/- 285.8  0.545
-  5 dPhi(tightphotons[0].Phi, MET.Phi) > 0.4     :  59996.00 +/- 244.9  0.400
-  6 METoverSqrtSumET > 8.5                       :  58807.00 +/- 242.5  0.392
-  7 cleanmuons.size == 0                         :  58804.00 +/- 242.5  0.392
-  8 cleanelectrons.size == 0                     :  58792.00 +/- 242.5  0.392
+  5 dPhi(tightphotons[0].Phi, MET.Phi) > 0.4     :  81577.00 +/- 285.6  0.544
+  6 METoverSqrtSumET > 8.5                       :  79783.00 +/- 282.5  0.532
+  7 cleanmuons.size == 0                         :  79779.00 +/- 282.5  0.532
+  8 cleanelectrons.size == 0                     :  79765.00 +/- 282.4  0.532
 
 preselection
   1 none                                         : 150000.00 +/- 387.3  1.000
   2 tightphotons.size > 0                        : 117746.00 +/- 343.1  0.785
   3 tightphotons[0].PT > 150                     :  93356.00 +/- 305.5  0.622
-  4 dPhi(tightphotons[0].Phi, MET.Phi) > 0.4     :  68236.00 +/- 261.2  0.455
-  5 METoverSqrtSumET > 8.5                       :  62045.00 +/- 249.1  0.414
-  6 cleanmuons.size == 0                         :  62042.00 +/- 249.1  0.414
-  7 cleanelectrons.size == 0                     :  62030.00 +/- 249.1  0.414
+  4 dPhi(tightphotons[0].Phi, MET.Phi) > 0.4     :  93118.00 +/- 305.2  0.621
+  5 METoverSqrtSumET > 8.5                       :  84190.00 +/- 290.2  0.561
+  6 cleanmuons.size == 0                         :  84186.00 +/- 290.1  0.561
+  7 cleanelectrons.size == 0                     :  84172.00 +/- 290.1  0.561
 
 SRE2
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  62030.00 +/- 249.1  0.414
-  3 MET.PT > 225 and MET.PT < 300                :  15385.00 +/- 124.0  0.103
+  2 preselection                                 :  84172.00 +/- 290.1  0.561
+  3 MET.PT > 225 and MET.PT < 300                :  21004.00 +/- 144.9  0.140
 
 SRI1
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  62030.00 +/- 249.1  0.414
-  3 MET.PT > 150                                 :  58792.00 +/- 242.5  0.392
+  2 preselection                                 :  84172.00 +/- 290.1  0.561
+  3 MET.PT > 150                                 :  79765.00 +/- 282.4  0.532
 
 SRI2
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  62030.00 +/- 249.1  0.414
-  3 MET.PT > 225                                 :  33013.00 +/- 181.7  0.220
+  2 preselection                                 :  84172.00 +/- 290.1  0.561
+  3 MET.PT > 225                                 :  44853.00 +/- 211.8  0.299
 
 SRI3
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  62030.00 +/- 249.1  0.414
-  3 MET.PT > 300                                 :  17628.00 +/- 132.8  0.118
+  2 preselection                                 :  84172.00 +/- 290.1  0.561
+  3 MET.PT > 300                                 :  23849.00 +/- 154.4  0.159
 
 SRE1
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  62030.00 +/- 249.1  0.414
-  3 MET.PT > 150 and MET.PT < 225                :  25779.00 +/- 160.6  0.172
+  2 preselection                                 :  84172.00 +/- 290.1  0.561
+  3 MET.PT > 150 and MET.PT < 225                :  34912.00 +/- 186.8  0.233
 
 ==> histograms saved to file analyzer_histograms.root
 TFile**		analyzer_histograms.root	
  TFile*		analyzer_histograms.root	
-  OBJ: TH1F	counts	 : 0 at: 0x7fb929f97d40
+  OBJ: TH1F	counts	 : 0 at: 0x7feed3e3d100
   KEY: TH1F	cutflow_lhprocsel;1	
   KEY: TH1F	cutflow_preselection;1	
   KEY: TH1F	cutflow_SRE2;1	
