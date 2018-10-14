@@ -93,7 +93,9 @@ object jetsSR
   reject dPhijmet < 0.4
 
 object scalarHT
-  # scalar sum of jets, electrons, photons, muons
+  # scalar sum of pT of jets, electrons, photons, muons
+  # NB: such variables need to be precisely defined so that
+  # adapters know how to compute them
   take Delphes_scalarHT
 
 # VARIABLES

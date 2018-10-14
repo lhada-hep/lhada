@@ -8,6 +8,7 @@
 #          14-May-2018 HBP add count histogram for each cut block
 #          16-May-2018 HBP completely decouple lhada analyzer from tnm
 #          18-May-2018 HBP fix bug process_functions
+#          14-Oct-2018 HBP use LHADA2TNM_PATH/external/include to find includes
 #--------------------------------------------------------------------------------
 import sys, os, re, optparse, urllib
 from time import ctime
@@ -68,28 +69,28 @@ SINGLETON_CACHE = set()
 
 # C++ LHADA analyzer template
 TEMPLATE_CC =\
-'''//---------------------------------------------------------------------------
+'''//------------------------------------------------------------------
 // File:        %(name)s_s.cc
 // Description: Analyzer for LHADA analysis:
 %(info)s
 // Created:     %(time)s by lhada2tnm.py
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 #include <algorithm>
 #include "%(name)s_s.h"
 %(includes)s
 using namespace std;
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // The following functions, objects, and variables are globally visible
 // within this programming unit.
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 %(fundef)s
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 %(vardef)s
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 %(objdef)s
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 %(cutdef)s
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 %(name)s_s::%(name)s_s()
 {
 %(vobjects)s
@@ -128,18 +129,18 @@ void %(name)s_s::summary(TFile* fout, ostream& os)
 TEMPLATE_HH =\
 '''#ifndef %(name)s_s_HH
 #define %(name)s_s_HH
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 // File:        %(name)s_s.h
 // Description: Analyzer for LHADA analysis:
 %(info)s
 // Created:     %(time)s by lhada2tnm.py
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 #include <algorithm>
 #include <iostream>
 #include "TFile.h"
 #include "TH1F.h"
 #include "TEParticle.h"
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 struct lhadaThing
 {
   lhadaThing() {}
@@ -166,18 +167,18 @@ struct %(name)s_s
 
 # C++ TNM analyzer template
 TNM_TEMPLATE_CC =\
-'''//---------------------------------------------------------------------
+'''//------------------------------------------------------------------
 // File:        %(name)s.cc
 // Description: Analyzer for LHADA analysis:
 %(info)s
 // Created:     %(time)s by lhada2tnm.py
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 #include "tnm.h"
 #include "%(adaptername)s.h"
 #include "%(name)s_s.h"
 
 using namespace std;
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 int main(int argc, char** argv)
 {
   // If you want canvases to be visible during program execution, just
@@ -207,23 +208,21 @@ int main(int argc, char** argv)
 
   // Create output file for histograms; see notes in header 
   outputFile of(cl.outputfilename);
-
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   // Define histograms
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   //setStyle();
 
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   // Create an event adapter to map input types to a standard internal 
   // type and create the analyzer
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   %(adaptername)s %(adapter)s;
 
   %(name)s_s %(analyzer)s;
-
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   // Loop over events
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   for(int entry=0; entry < nevents; entry++)
     {
       // read an event into event buffer
@@ -689,9 +688,9 @@ def process_functions(names, blocks):
             # internal code not yet implemented
             if code == 'c++': continue
                 
-            # assume code declaratioin in within a header. find header
+            # assume code declaration is within a header. find header
             code = strip(code)
-            t = findHeaderFile(code, ['*'])
+            t = findHeaderFile(code, ['$LHADA2TNM_PATH/external/include'])
             if len(t) == 0:
                 boohoo('unable to locate header: %s' % code)
 
@@ -699,7 +698,10 @@ def process_functions(names, blocks):
             include = t[0]
             if include == '':
                 boohoo('problem getting header name: %s' % code)
-                
+
+            # but first copy header to local include directory
+            os.system('cp %s include/' % include)
+                          
             record = open(include).read()
             
             # find all function declarations in header
@@ -1385,12 +1387,32 @@ def process_cuts(names, blocks, blocktypes):
     names['vcuts']  = vcuts
 #--------------------------------------------------------------------------------
 def main():
+
+    # check if setup.sh has been sourced
+    if not os.environ.has_key("LHADA2TNM_PATH"):
+        sys.exit('''
+**lhada2tnm.py** please source setup.sh in lhada2tnm to define
+    LHADA2TNM_PATH
+        then try again!
+''')
+        
+        
     filename, option = decodeCommandLine()
     names  = NAMES
     names['filename']    = filename
     names['name']        = option.name    
     names['treename']    = option.treename
     names['adaptername'] = option.adaptername
+
+
+    # copy TEParticle.h, TEParticle.cc, and requested adapter code to local area
+    cmd = '''
+cp $LHADA2TNM_PATH/external/include/TEParticle.h include/
+cp $LHADA2TNM_PATH/external/include/%(adaptername)s.h include/ 
+cp $LHADA2TNM_PATH/external/src/TEParticle.cc src/
+cp $LHADA2TNM_PATH/external/src/%(adaptername)s.cc src/
+''' % names
+    os.system(cmd)    
     
     names['fundef']   = ''
     names['objdef']   = ''
@@ -1430,6 +1452,7 @@ def main():
     open('include/%(name)s_s.h' % names, 'w').write(record)
 
     record = TNM_TEMPLATE_CC % names
+
     open('%(name)s.cc' % names, 'w').write(record)
 
 
@@ -1463,7 +1486,7 @@ def main():
             record = strip(open(makefile).read())
             tnm    = re.compile('tnm.h.*$', re.M)
             record = tnm.sub('tnm.h $(incdir)/%(name)s_s.h' % names, record)
-            open(makefile, 'w').write(record)            
+            open(makefile, 'w').write(record)    
 #--------------------------------------------------------------------------------        
 try:
     main()
