@@ -30,7 +30,7 @@ to flat __ROOT__ trees comprising branches of single variables of the
 standard types
 __float__,  __int__, __double__, etc., and variable length arrays and STL
 vectors of the same. Anything more complicated than
-these types are unceremoniously dumped on the floor!
+these types are unceremoniously dumped onto the floor!
 
 ## Setup
 
