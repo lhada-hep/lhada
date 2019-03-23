@@ -35,9 +35,9 @@ these types are unceremoniously dumped onto the floor!
 ## Setup
 
 The file __setup.sh__ in lhada2tnm should be executed once per terminal window
-session to define the environment variable __LHAD2TNMP\_PATH__, which
+session to define the environment variable __LHADA2TNM\_PATH__, which
 points to lhada2tnm and
-adds $LHADA2PATH/bin to your PATH. Also make sure that you have
+adds $LHADA2TNM_PATH/bin to your __PATH__. Also make sure that you have
 access to treestream by executing the command
 ```bash
   source $HOME/external/setup.sh
