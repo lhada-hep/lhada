@@ -28,7 +28,7 @@ packages such as __treestream__ using the command
 The package __treestream__ provides a simple convenient 	interface
 to flat ROOT trees comprising single variables (branches) of the
 standard types
-*float*,  *int*, *double*, etc., and variable length arrays and STL
+__float__,  __int__, __double__, etc., and variable length arrays and STL
 vectors of the same. Anything more complicated than
 these types are unceremoniously dumped on the floor!
 
@@ -40,10 +40,10 @@ points to the top level directory of __lhada2tnm__ and
 adds $LHADA2PATH/bin to your PATH. Also make sure that you have
 access to __treestream__ by executing the command
 ```bash
-	source $HOME/external/setup.sh
+  source $HOME/external/setup.sh
 ```
-again, once per terminal session. Here, we've assumed you have cloned
-__treestream__ to $HOME/external as suggested.
+again, once per terminal session. We've assumed you have cloned
+__treestream__ to \$HOME/external as suggested.
 
 ## Example
 In this example, we shall try to run the ATLAS mono-photon analysis,
@@ -62,42 +62,43 @@ this tree is called *Events*. Now execute the command
 	mkanalyzer.py cmsnano
 ```
 This should create a directory called __cmsnano__. Change to that
-directory and do an *ls*. You should see a standard TNM release area:
+directory and do an __ls__. You should see a standard TNM release area:
 ```bash
 Makefile     cmsnano.cc include    python     src
 README     cmsnano.py lib           setup.sh   tmp
 ```
-We are now going to overwrite *cmsnano.cc* with a version that runs
+We are now going to overwrite __cmsnano.cc__ with a version that runs
 the ATLAS mono-photon analysis on the CMS nano-AOD file
 __ttjets\_NANOAOD.root__. Of course, we don't expect useful
 results. This is just an exercise! To that end, run the command
 ```bash
 	lhada2tnm.py -a cmsnano -e CMSNanoAODAdapter -t Events ../../../doc/ATLASEXOT1704.0384_Delphes.lhada
 ```
-This command instructs *lhada2tnm.py* to create a main program called
-*cmsnano.cc*, which calls the code in *src/cmsnano_s.cc*, and to use
-an __event adapter__ called *CMSNanoAODAdapter* to map the input data
-types, which are CMS nano-AOD types, to (in this example) *Delphes*
+This command instructs __lhada2tnm.py__ to create a main program called
+__cmsnano.cc__, which calls the code in __src/cmsnano_s.cc__, and to use
+an __event adapter__ called __CMSNanoAODAdapter__ to map the input data
+types, which are CMS nano-AOD types, to (in this example) __Delphes__
 types.	Perhaps a better name for this event adapter would have been
-*CMSnanoAOD2Delphes*. The *-t* switch specifies which tree within
+__CMSnanoAOD2Delphes__. The __-t__ switch specifies which tree within
 __ttjets\_NANOAOD.root__ is to be used and the file contains the ATLAS
 mono-photon analysis described using the ADL.
 
-The *lhada2tnm.py* command creates
-    * cmsnano.cc
-	* include/cmsnano\_s.h
-	* src/cmsnano\_s.cc
+The __lhada2tnm.py__ command creates
+* cmsnano.cc
+* include/cmsnano\_s.h
+* src/cmsnano\_s.cc
 updates
-	* Makefile
-	* include/linkdef
-and copies some files to include and src. The real workhorse is the
-C++ program *src/cmsnano_s.cc*, which is written to be human readable,
+* Makefile
+* include/linkdef
+
+and copies some files to *include* and *src*. The real workhorse is the
+C++ program __src/cmsnano_s.cc__, which is written to be human readable,
 well at any rate readable by that perculiar variety of human called a
-physicist. Now build the program using
+particle physicist. Now build the program using
 ```bash
 	make
 ```
-and run it by first specifying in the file *filelist.txt* which file (or files) are to be read,
+and run it by first specifying in the file __filelist.txt__ which file (or files) are to be read,
 e.g., as follows,
 ```bash
 	ls -1 ../../ttjets_NANOAOD.root > filelist.txt
