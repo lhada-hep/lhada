@@ -85,7 +85,7 @@ which instructs __lhada2tnm.py__ to create a main program called
 __cmsnano.cc__, which calls the code in __src/cmsnano_s.cc__. The main program uses
 an __event adapter__ called __CMSNanoAODAdapter__ to map the input data
 types, which in this example are CMS nano-AOD types, to __Delphes__
-types, which are the types used in the specified ADL file. In hindsight, perhaps a better name for this event adapter would have been
+types, which are the types used in the specified ADL file. With hindsight, perhaps a better name for this event adapter would have been
 __CMSnanoAOD2Delphes__. Oh well! The __-t__ switch specifies which tree within
 ttjets\_NANOAOD.root is to be used. The last item in the command is the file containing the ATLAS
 mono-photon analysis described using the ADL.
