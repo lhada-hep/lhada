@@ -16,7 +16,7 @@ package is structured as follows,
 |examples/susy| analyzer for an ATLAS SUSY analysis|
 | external   | external code is copied here |
 
-and depends on the github package __treestream__, which we recommend
+This package depends on the github package __treestream__, which we recommend
 you clone (download) to well-defined area on your machine (for
 example, a directory called  __$HOME/external__) for external
 packages such as __treestream__ using the command
