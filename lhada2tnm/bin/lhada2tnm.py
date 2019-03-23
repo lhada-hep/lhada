@@ -9,17 +9,21 @@
 #          16-May-2018 HBP completely decouple lhada analyzer from tnm
 #          18-May-2018 HBP fix bug process_functions
 #          14-Oct-2018 HBP use LHADA2TNM_PATH/external/include to find includes
+#          20-Mar-2019 HBP fix implicit loop bug and make implicit loops more
+#                      robust
 #--------------------------------------------------------------------------------
 import sys, os, re, optparse, urllib
 from time import ctime
 from string import joinfields, split, replace, find, strip, lower, rstrip
 #--------------------------------------------------------------------------------
+VERSION = 'v1.0.2'
+
 DEBUG = 0
 
-# LHADA Block types
+# ADL block types
 BLOCKTYPES = ['info', 'table', 'function', 'object', 'variable', 'cut']
 
-# LHADA keywords
+# ADL keywords
 KEYWORDS   = ['experiment',
               'id',
               'publication',
@@ -36,7 +40,7 @@ TOKENS = set(BLOCKTYPES+KEYWORDS)
 
 SPACE6   = ' '*6
 
-# some simple regular expression to dissect lhada file
+# some simple regular expression to dissect ADL file
 KWORDS   = r'\b(%s)\b' % joinfields(KEYWORDS, '|')
 exclude  = re.compile(KWORDS)
 getwords = re.compile('lha[.][a-zA-Z0-9]+|[a-zA-Z][a-zA-Z0-9_]*')
@@ -51,8 +55,9 @@ getfunctions = re.compile('^\s*[\w_]+\s+[a-zA-Z][\w_]+\s*[(][^{]+', re.M)
 tlorentz_vector = re.compile('vector\s*[<]\s*TLorentzVector\s*[>]')
 nip      = re.compile('[_](?=[a-zA-Z])|(?<=[a-zA-Z0-9])[_](?= )')
 
-# some objects are singletons. try to guess which ones
-# this is very simpleminded; will have to do better later
+# some objects are singletons, that is, there is only one instance of the
+# object per event. try to guess which ones:
+# this algorithm is very simpleminded; will have to do better later
 single   = re.compile('missing|met|event|scalar')
 #--------------------------------------------------------------------------------
 NAMES = {'name': 'analyzer',
@@ -62,18 +67,19 @@ NAMES = {'name': 'analyzer',
              'aoddef': '',
              'aodimpl': '',
              'adapter': 'adapter',
-             'analyzer': 'analyzer'
+             'analyzer': 'analyzer',
+             'version': VERSION
              }
     
 SINGLETON_CACHE = set()
 
-# C++ LHADA analyzer template
+# C++ ADL analyzer template
 TEMPLATE_CC =\
 '''//------------------------------------------------------------------
 // File:        %(name)s_s.cc
-// Description: Analyzer for LHADA analysis:
+// Description: Analyzer for ADL-based analysis:
 %(info)s
-// Created:     %(time)s by lhada2tnm.py
+// Created:     %(time)s by lhada2tnm.py %(version)s
 //------------------------------------------------------------------
 #include <algorithm>
 #include "%(name)s_s.h"
@@ -125,15 +131,15 @@ void %(name)s_s::summary(TFile* fout, ostream& os)
 }
 '''
 
-# C++ LHADA analyzer header template
+# C++ ADL analyzer header template
 TEMPLATE_HH =\
 '''#ifndef %(name)s_s_HH
 #define %(name)s_s_HH
 //------------------------------------------------------------------
 // File:        %(name)s_s.h
-// Description: Analyzer for LHADA analysis:
+// Description: Analyzer for ADL-based analysis:
 %(info)s
-// Created:     %(time)s by lhada2tnm.py
+// Created:     %(time)s by lhada2tnm.py %(version)s
 //------------------------------------------------------------------
 #include <algorithm>
 #include <iostream>
@@ -169,9 +175,9 @@ struct %(name)s_s
 TNM_TEMPLATE_CC =\
 '''//------------------------------------------------------------------
 // File:        %(name)s.cc
-// Description: Analyzer for LHADA analysis:
+// Description: Analyzer for ADL analysis:
 %(info)s
-// Created:     %(time)s by lhada2tnm.py
+// Created:     %(time)s by lhada2tnm.py %(version)s
 //------------------------------------------------------------------
 #include "tnm.h"
 #include "%(adaptername)s.h"
@@ -243,15 +249,19 @@ int main(int argc, char** argv)
 }
 '''
 #--------------------------------------------------------------------------------
-VERSION = 'v1.0.1'
 USAGE ='''
     Usage:
-       lhada2tnm.py [options] LHADA-file-name
+       lhada2tnm.py [options] ADL-file-name
 
     Options:
     -a name of analyzer to be created [analyzer]
     -e name of event adapter          [DelphesAdapter]
-    -t name of TNM ROOT tree          [Delphes]
+    -t name of ROOT tree              [Delphes]
+
+    Available adapters       tree name
+    ----------------------------------
+    DelphesAdapater          Delphes
+    CMSNanoAODAdapter        Events
     '''
 def decodeCommandLine():
 
@@ -281,9 +291,24 @@ def decodeCommandLine():
     options, args = parser.parse_args()
     if len(args) == 0:
         sys.exit(USAGE)
-        
-    # get inspire command
+
+    # make sure correct tree goes with specified event adapter if treename
+    # is not given
+    if options.adaptername == 'CMSNanoAODAdapter':
+        if options.treename == 'Delphes':
+            options.treename = 'Events'
+            
     filename = args[0]
+    print('''
+    analyzer:        %(name)s
+    event adapter:   %(adaptername)s
+    ROOT tree:       %(treename)s
+    ADL filename:    %(filename)s
+''' % {'name': options.name,
+           'adaptername': options.adaptername,
+           'treename': options.treename,
+           'filename': filename})
+
     return (filename, options)
 
 def nameonly(s):
@@ -295,11 +320,12 @@ def join(left, a, right):
         s = s + "%s%s%s" % (left, x, right)
     return s
 
+# split a record into words, but exclude ADL keywords
 def getWords(records):
     words = []
     for record in records:
         words += split(record)
-    # exclude LHADA keywords
+    # exclude ADL keywords
     record = joinfields(words, ' ')
     words  = split(exclude.sub('', record))
     return words
@@ -308,6 +334,7 @@ def boohoo(message):
     sys.exit('** lhada2tnm.py * %s' % message)
 #------------------------------------------------------------------------------
 # Look for header file on given list of search paths
+#------------------------------------------------------------------------------
 def findHeaderFile(infile, incs):
 	file = strip(os.popen("find %s 2>/dev/null" % infile).readline())    
 	if file != "":
@@ -334,6 +361,8 @@ def findHeaderFile(infile, incs):
 		if filepath != "": return (filepath, file)
 
 	return ("","")
+#------------------------------------------------------------------------------
+# Make a valiant attempt to analyze, and extract, calling sequence of a function
 #------------------------------------------------------------------------------
 funcname = re.compile('[a-zA-Z]+[\w\<:,\>]*(?=[(])')
 findtemparg = re.compile('(?<=[<]).+(?=[>])')
@@ -378,7 +407,8 @@ def decodeFunction(record):
             argnames.append(t[-1])
     return (rtype, fname, argtypes, argnames)
 #-----------------------------------------------------------------------------
-# use a simple bubble-like sort to sort blocks according to dependency
+# Use a simple bubble-like sort to sort blocks according to dependency
+#------------------------------------------------------------------------------
 def sortObjects(objects):
     from copy import deepcopy
     # 1) get blocks with no dependencies on internal blocks
@@ -412,7 +442,7 @@ def sortObjects(objects):
             t[0] = None
     return obs    
 #--------------------------------------------------------------------------------
-# Read LHADA file and extract blocks into a simple internal data structure
+# Read ADL file and extract blocks into a simple internal data structure
 #--------------------------------------------------------------------------------
 def extractBlocks(filename):
     if DEBUG > 0:
@@ -422,12 +452,12 @@ def extractBlocks(filename):
     import re
     from string import rstrip, split, strip    
     #--------------------------------------------
-    # read LHADA file
+    # read ADL file
     #--------------------------------------------    
     try:
         records = open(filename).readlines()
     except:
-        boohoo('unable to open LHADA file %s' % filename)
+        boohoo('unable to open ADL file %s' % filename)
 
     #--------------------------------------------    
     # set up some simple regular expressions
@@ -439,7 +469,7 @@ def extractBlocks(filename):
     
     #--------------------------------------------    
     # strip out comments and blank lines,
-    # but note correct line numbers of records
+    # but note original line numbers of records
     #--------------------------------------------        
     orig_records = [x for x in records]
     records = []
@@ -452,7 +482,7 @@ def extractBlocks(filename):
         records.append((lineno, record))
 
     #--------------------------------------------    
-    # loop over lhada records
+    # loop over ADL records
     #--------------------------------------------    
     blocks = {}
     bname  = None
@@ -500,6 +530,7 @@ def extractBlocks(filename):
         if bname == None:
             boohoo('problem at line\n%4d %s\n' % (lineno, record))
 
+        # statements can extend over multiple records (lines), so
         # lookahead to determine if current record is the end
         # of the current statement
         statement.append(record)
@@ -511,7 +542,7 @@ def extractBlocks(filename):
             if  next_token in TOKENS:
                 # next token is a reserved token (either a blocktype
                 # or a keyword), so current record is the end of the
-                # current the statement
+                # current statement
                 blocks[bname]['body'].append(joinfields(statement, ' '))
                 # remember to reset statement
                 statement = []
@@ -539,8 +570,9 @@ def extractBlocks(filename):
 
         # if block type is object, strip away words within this
         # block that are not object names using set intersection:
-        # C = A and B. the remaining words will be used to sort
-        # the blocks according to dependency
+        # C = A and B. the remaining words will be user-defined
+        # words and will be used to sort the blocks according to
+        # block-to-block dependency
         if blocktype == 'object':
             words = objectnames.intersection(words)
         elif blocktype == 'cut':
@@ -606,7 +638,7 @@ def printBlocks(blocks):
             out.write('%s\n' % record)
     out.close()
 #--------------------------------------------------------------------------------
-# The following functions convert LHADA blocks to C++
+# The following functions convert ADL blocks to C++
 #--------------------------------------------------------------------------------
 def process_info(names, blocks):
     info = '//\n// LHADA file: %(filename)s\n' % names
@@ -716,7 +748,7 @@ def process_functions(names, blocks):
                     # we have a match, so create internal function
                     if len(args) != len(argtypes):
                         boohoo('''argument count mismatch in function %s.
-expected arguments %s, but %s found in LHADA file
+expected arguments %s, but %s found in ADL file
 ''' % (origname, v, args))
 
                     # note: internal functions could have arguments
@@ -769,14 +801,16 @@ expected arguments %s, but %s found in LHADA file
     
     blocks['function_info'] = functions
 #--------------------------------------------------------------------------------
-# check whether to start an inner loop.
-# we start an inner loop if the next record contains a variable
+# check whether we have an implicit loop.
+# we have an implicit loop if the next record contains a variable
 # of the form <objectname>.<variable> and objectname is not
-# a singleton. for now we do not allow nested inner loops
-def beginInnerLoop(records, index, blocktypes):
+# a singleton. here a singleton is defined to be an object of which only one
+# occurs per event. for now we do not handle nested implicit loops
+#--------------------------------------------------------------------------------
+def checkForImplicitLoop(records, index, blocktypes):
     if index >= len(records)-1: return None
         
-    # get words from next record, including those of the form
+    # get words from next record at position "index", including those of the form
     # <name>.<variable>
     index  += 1    
     record  = records[index]
@@ -785,7 +819,8 @@ def beginInnerLoop(records, index, blocktypes):
         print "begin-LOOKAHEAD( %s )" % words
 
     # identify words of the form <name>.<variable> and check if the word
-    # <name> appears in the list of non-singleton objects 
+    # <name> appears in the list of non-singleton objects. if it does, then we
+    # assume that we are to loop of name and access its attribute "variable"
     objectnames = set(blocktypes['object'])
     for x in words:
         t = split(x, '.')
@@ -801,34 +836,19 @@ def beginInnerLoop(records, index, blocktypes):
                         print "\tloop over object( %s )" % name
                 return name
     return None
-
-# check if the next record fails to contain a variable from the list of
-# variables within an inner loop. if the  record fails to contain such
-# a variable it is assumed that the current inner loop should end.
-def endInnerLoop(records, index, loopvar):
-    if index >= len(records)-1: return True
-
-    # get words from next record, including those of the form
-    # <name>.<variable>        
-    index += 1
-    record = records[index]
-    words  = set(getvars.findall(record))
-    if DEBUG > 0:
-        print "end-LOOKAHEAD( %s )" % words, loopvar
-        
-    t = words.intersection(loopvar)
-    if len(t) == 0:
-        if DEBUG > 0:
-            print "\tend loop"
-        return True
-    else:
-        return False
-    
-def convert2cpp(record, btype, blocktypes):
-    # do some simple fixes
+#--------------------------------------------------------------------------------
+# convert given ADL record into the corresponding C++ code snippet
+# record:     current ADL record
+# btype:      current ADL block type
+# blocktypes: block types and associated names
+# localvar:   variables local to current block that are not bound to an object.
+#--------------------------------------------------------------------------------
+def convert2cpp(record, btype, blocktypes, localvar=set()):
+    # start with some simple replacements
     record = replace(record, "|", "@")
     record = replace(record, "[", ";:")
     record = replace(record, "]", ":;")
+    # replace AND and OR with c++ syntax for the same
     record = cppAND.sub('&&', record)
     record = cppOR.sub('||\n\t', record)
 
@@ -842,13 +862,15 @@ def convert2cpp(record, btype, blocktypes):
         # if this is an object block,
         # check if variable is of the form a.b
         # if it is, we make the replacement a.b -> a("b"). 
-        # consider PT and e.PT
-        # but we want
+        # but, consider PT and e.PT,
+        # we want
         #    PT    -> p("pt") if PT is not preceded by "e."
         #    e.PT  -> e("pt") if PT is preceded by "e."
         # if, however, this is a cut object, we make the following
         # changes: .size -> .size()
         #          a.b   -> a("b")
+        # however, if a variable is a local variable, e.g., assigned
+        # within an implied loop, it should be used as is.
         
         t = split(name, '.')
         undotted = len(t) == 1
@@ -857,70 +879,74 @@ def convert2cpp(record, btype, blocktypes):
         # check for singleton
         a_singleton = oname in SINGLETON_CACHE
         
-        field = t[-1]
-        newfield = field
+        field     = t[-1]
+        newfield  = field
+        oldrecord = record
         
         # need to handle things like PT and e.PT
         # also need to check for singleton objects
         if btype == 'object':
-            if undotted:
+            if name in localvar:
+                pass # do nothing; use name as is
+            elif undotted:
                 if not a_singleton: oname = "p"
                 edit = re.compile('(?<![.])%s' % field)
+                newfield = '%s("%s")' % (oname, lower(field))
+                record = edit.sub(newfield, record)
             else:
                 edit = re.compile('\\b%s\\b' % name)
-            newfield = '%s("%s")' % (oname, lower(field))
+                newfield = '%s("%s")' % (oname, lower(field))
+                record = edit.sub(newfield, record)                
 
             if DEBUG > 0:
                 print "\tobject: oname( %s ) field( %s ) newfield( %s )" % \
                 (oname, field, newfield)
-                print "\t\told-record( %s )" % strip(record)
-                
-            record = edit.sub(newfield, record)
-        
-            if DEBUG > 0:
+                print "\t\told-record( %s )" % strip(oldrecord)
                 print "\t\tnew-record( %s )" % strip(record)
             
         elif btype == 'apply':
-            if undotted:
+            if name in localvar:
+                pass
+            elif undotted:
                 if not a_singleton: oname = "p"
                 edit = re.compile('(?<![.])%s' % field)
+                newfield = '%s("%s")' % (oname, lower(field))
+                record = edit.sub(newfield, record)                
             else:
                 if not a_singleton: oname = "q"
                 edit = re.compile('\\b%s\\b' % name)
-            newfield = '%s("%s")' % (oname, lower(field))
+                newfield = '%s("%s")' % (oname, lower(field))
+                record = edit.sub(newfield, record)                
             
             if DEBUG > 0:
                 print "\tapply: oname( %s ) field( %s ) newfield( %s )" % \
                 (oname, field, newfield)
-                print "\t\told-record( %s )" % strip(record)
-                
-            record = edit.sub(newfield, record)
-        
-            if DEBUG > 0:
+                print "\t\told-record( %s )" % strip(oldrecord)
                 print "\t\tnew-record( %s )" % strip(record)
 
         elif btype == 'reject':
-            if undotted:
+            if name in localvar:
+                pass
+            elif undotted:
                 if not a_singleton: oname = "p"
                 edit = re.compile('(?<![.])%s' % field)
+                newfield = '%s("%s")' % (oname, lower(field))
+                record = edit.sub(newfield, record)                
             else:
                 if not a_singleton: oname = "q"
                 edit = re.compile('\\b%s\\b' % name)
-            newfield = '%s("%s")' % (oname, lower(field))
+                newfield = '%s("%s")' % (oname, lower(field))
+                record = edit.sub(newfield, record)                
             
             if DEBUG > 0:
                 print "\treject: oname( %s ) field( %s ) newfield( %s )" % \
                 (oname, field, newfield)
-                print "\t\told-record( %s )" % strip(record)
-                
-            record = edit.sub(newfield, record)
-        
-            if DEBUG > 0:
+                print "\t\told-record( %s )" % strip(oldrecord)
                 print "\t\tnew-record( %s )" % strip(record)                   
             
         elif btype == 'cut':
             if undotted:
-                # check if this is the result of another section
+                # check if this is the result of another block
                 if name in blocktypes['cut']:
                     edit = re.compile('\\b%s\\b' % name)
                     newfield = 'cut_%s()' % name
@@ -929,9 +955,7 @@ def convert2cpp(record, btype, blocktypes):
                           (oname, field, newfield)
                           
                     record = edit.sub(newfield, record)
-                    
-                    if DEBUG > 0:
-                        print "\t\told-record( %s )" % strip(record)
+
             else:
                 edit = re.compile('\\b%s\\b' % name)
                 if field == 'size':
@@ -942,14 +966,15 @@ def convert2cpp(record, btype, blocktypes):
                 if DEBUG > 0:
                     print "\tapply: oname( %s ) field( %s ) newfield( %s )" % \
                     (oname, field, newfield)
-                    print "\t\told-record( %s )" % strip(record)
+                    print "\t\told-record( %s )" % strip(oldrecord)
                 
                 record = edit.sub(newfield, record)
         
-                if DEBUG > 0:
-                    print "\t\tnew-record( %s )" % strip(record)                    
+            if DEBUG > 0:
+                print "\t\told-record( %s )" % strip(oldrecord)                    
+                print "\t\tnew-record( %s )" % strip(record)                    
 
-    # final cleanup     
+    # now go back to original symbols |, [, and ]    
     record = replace(record, '@',  '|')
     record = replace(record, ';:', '[')
     record = replace(record, ':;', ']')
@@ -979,13 +1004,13 @@ def process_multiple_objects(name, records, TAB, blocktypes):
     tab     = TAB
     tab4    = ' '*4
     objdef  = '%s%s.clear();\n' % (tab, name)
+
+    # cache for local variables, such as one returned by a function
+    # call.
+    localvar = set() 
     
-    loopobj = None
-    loopvar = set() # to cache loop variables
-    
-    # state booleans for handling inner loops
-    active_inner_loop = False
-    begin_inner_loop  = False
+    # state boolean for handling implicit loops
+    implicit_loop  = False
     
     if DEBUG > 0:
         print "\nNAME( %s )" % name
@@ -999,15 +1024,16 @@ def process_multiple_objects(name, records, TAB, blocktypes):
         if DEBUG > 0:
             print "TOKEN( %s )\tvalue( %s )" % (token, value)
 
-        objname = beginInnerLoop(records, index, blocktypes)
+        # we put the check for implicit loops here anticipating that in a
+        # future update, we shall handle implicit loops in select and reject
+        # statements. in the current version of this code, we handle
+        # implicit loops in apply statements, that is, in function calls
+        objname = checkForImplicitLoop(records, index, blocktypes)
         if objname != None:
-            begin_inner_loop  = True
-            # cache name of object over which to loop in inner loop
+            implicit_loop  = True
+            # cache name of object over which to loop in implicit loop
             object_name = objname
             
-            if DEBUG > 0:
-                print '   BEGIN( INNER LOOP )'
-                
         if   token == 'take':
             # --------------------------------------------            
             # TAKE
@@ -1020,22 +1046,6 @@ def process_multiple_objects(name, records, TAB, blocktypes):
             # --------------------------------------------            
             # APPLY
             # --------------------------------------------
-            
-            if begin_inner_loop:
-                begin_inner_loop  = False
-                active_inner_loop = True
-                loopvar = set()
-                loopvar.add(object_name)
-                
-                # adjust tab
-                tab = TAB + tab4
-                
-                objdef += '%sbool skip = false;\n' % tab
-                objdef += '%sfor(size_t n=0; n < %s.size(); n++)\n' % \
-                (tab, object_name)
-                objdef += '%s  {\n' % tab
-                objdef += '%s%sTEParticle& q = %s[n];\n' % (tab, tab4, object_name)
-
             # get function call and function name
             # check that function has been declared
             fcall  = joinfields(t[1:-1], ' ')
@@ -1053,7 +1063,8 @@ def process_multiple_objects(name, records, TAB, blocktypes):
             if not function_found:
                 boohoo('please use a function block to declare function %s' % fname)
 
-            rvalue = t[-1]
+            rvalue = t[-1]  # name of return value
+            
             if fcall[-1] != ')':
                 boohoo('''
 %s
@@ -1062,15 +1073,40 @@ perhaps you're missing a return value in:
 ''' % (objdef, record))
 
             a, b = split(fcall, '(')
-            b = convert2cpp(b, 'apply', blocktypes)
+            b = convert2cpp(b, 'apply', blocktypes, localvar)
             a = replace(a, '.', '_')
-            fcall = '%s(%s' % (a, b)
+            fcall = '%s(%s' % (a, b)   # function call
+            # cache name of variable returned by function call,
+            # which can be either a single value or, if we have an
+            # implied loop, multiple values we call a "cutvector"
+            localvar.add(rvalue)
             
-            objdef += '%s%sdouble %s = %s;\n' % (tab, tab4, rvalue, fcall)
-            objdef += '%s%sp("%s", %s);\n' % (tab, tab4, lower(rvalue), rvalue)
-            
-            # cache variables defined within loop
-            loopvar.add(rvalue)
+            if implicit_loop:
+                localvar.add(object_name)
+                
+                # adjust tab
+                tab = TAB + tab4
+
+                if DEBUG > 0:
+                    print '   BEGIN( IMPLICIT LOOP )'
+                    print '     %s' % fcall
+                
+                objdef += '%scutvector<double> %s(%s.size());\n' % (tab,
+                                                                      rvalue,
+                                                                    object_name)
+                objdef += '%sfor(size_t n=0; n < %s.size(); n++)\n' % \
+                (tab, object_name)
+                objdef += '%s  {\n' % tab
+                objdef += '%s%sTEParticle& q = %s[n];\n' % (tab, tab4, object_name)
+                objdef += '%s%s%s[n] = %s;\n' % (tab, tab4, rvalue, fcall)
+                objdef += '%s  }\n' % tab
+                if DEBUG > 0:
+                    print '   END( IMPLICIT LOOP )'
+                    
+                # remember to reset implicit loop state
+                # and the tab
+                implicit_loop  = False
+                tab = TAB
 
         elif token == 'select':
             # --------------------------------------------            
@@ -1078,41 +1114,15 @@ perhaps you're missing a return value in:
             # --------------------------------------------
             objdef += '%s%sif ( !(%s) ) continue;\n' % \
               (tab, tab4,
-                   convert2cpp(value, 'object', blocktypes))
+                   convert2cpp(value, 'object', blocktypes, localvar))
 
         elif token == 'reject':
             # --------------------------------------------            
             # REJECT
             # --------------------------------------------
-            if active_inner_loop:              
-                objdef += '%s%sif ( %s )\n' % (tab, tab4,
-                                                   convert2cpp(value,
-                                                                   'reject',
-                                                                   blocktypes))
-                objdef += '%s%s  {\n' % (tab, tab4)
-                objdef += '%s%s    skip = true;\n' % (tab, tab4)
-                objdef += '%s%s    break;\n' % (tab, tab4)
-                objdef += '%s%s  }\n' % (tab, tab4)
-            else:
-                objdef += '%s%sif ( %s ) continue;\n' % (tab, tab4,
-                                                    convert2cpp(value,
-                                                                   'object',
-                                                                   blocktypes))       
-        if active_inner_loop:
-            
-            if endInnerLoop(records, index, loopvar):
-            
-                active_inner_loop = False
-                begin_inner_loop = False
-                tab = TAB
-                
-                if DEBUG > 0:
-                    print '   END( INNER LOOP )'            
-                # --------------------------------------
-                # END INNER LOOP
-                # --------------------------------------
-                objdef += '%s%s  }\n' % (tab, tab4)
-                objdef += '%s%sif ( skip ) continue;\n' % (tab, tab4)            
+            objdef += '%s%sif ( %s ) continue;\n' % \
+              (tab, tab4,
+                   convert2cpp(value, 'object', blocktypes, localvar))
             
     objdef += '%s%s%s.push_back(p);\n' % (tab, tab4, name)
     objdef += '%s  }\n' % tab
@@ -1487,7 +1497,7 @@ cp $LHADA2TNM_PATH/external/src/%(adaptername)s.cc src/
             tnm    = re.compile('tnm.h.*$', re.M)
             record = tnm.sub('tnm.h $(incdir)/%(name)s_s.h' % names, record)
             open(makefile, 'w').write(record)    
-#--------------------------------------------------------------------------------        
+#--------------------------------------------------------------------------------     
 try:
     main()
 except KeyboardInterrupt:

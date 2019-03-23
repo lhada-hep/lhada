@@ -2,15 +2,42 @@
 #define TEPARTICLE_H
 // ---------------------------------------------------------------------------
 // File: TEParticle.h
-// Description: Prototype of a generic LHADA particle class.
+// Description: Prototype of a generic ADL particle class.
 // created: Les Houches 2015 HBP
+// updated: 21-Mar-2019 HBP add cutvalue template class
 // ---------------------------------------------------------------------------
 #include <iostream>
 #include <string>
+#include <vector>
 #include <map>
 #include "TROOT.h"
 #include "TLorentzVector.h"
 // ---------------------------------------------------------------------------
+template <class T>
+class cutvector : public std::vector<T>
+{
+ public:
+  cutvector<T>() : std::vector<T>() {}
+  cutvector<T>(size_t n) : std::vector<T>(n, 0) {}
+  ~cutvector<T>() {}
+
+  bool operator<(T x)
+  {
+    bool value=true;
+    for(size_t c=0; c < this->size(); c++)
+      value = value && ((*this)[c] < x);
+    return value;
+  }
+
+  bool operator>(T x)
+  {
+    bool value=true;
+    for(size_t c=0; c < this->size(); c++)
+      value = value && ((*this)[c] > x);
+    return value;
+  }
+};
+ 
 struct TEParticle : public TLorentzVector
 {
   TEParticle();
