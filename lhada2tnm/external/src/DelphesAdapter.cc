@@ -110,7 +110,7 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name,
 void DelphesAdapter::operator()(eventBuffer& ev, std::string name, TEParticle& p)
 {
   TString key(name.c_str());
-  key.ToLower();  
+  key.ToLower();
   if ( key.Contains("met") || key.Contains("missinget") )
     {
       TEParticle q(81, ev.MissingET_MET, ev.MissingET_Eta, ev.MissingET_Phi, 0);
@@ -119,11 +119,14 @@ void DelphesAdapter::operator()(eventBuffer& ev, std::string name, TEParticle& p
       q.Value["met"] = q.Pt();
       p = q;
     }
-  else if ( key.Contains("scalarht") || key.Contains("ht") )
+
+#ifdef WITH_SCALARHT
+  if ( key.Contains("scalarht") || key.Contains("ht") )
     {
       TEParticle q(82, ev.ScalarHT_HT, 0, 0, 0);
       q.Value["ht"]  = ev.ScalarHT_HT;
       q.Value["pt"]  = ev.ScalarHT_HT;
       p = q;
     }
+#endif
 }

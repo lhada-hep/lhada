@@ -1,8 +1,8 @@
 #ifndef analyzer_s_HH
 #define analyzer_s_HH
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 // File:        analyzer_s.h
-// Description: Analyzer for LHADA analysis:
+// Description: Analyzer for ADL-based analysis:
 //
 // LHADA file: ../../../doc/ATLASEXOT1704.0384_Delphes.lhada
 // info block
@@ -15,14 +15,14 @@
 //	hepdata     	https://www.hepdata.net/record/ins1591328
 //	doi         	10.1140/epjc/s10052-017-4965-8
 //
-// Created:     Fri May 18 15:57:11 2018 by lhada2tnm.py
-//---------------------------------------------------------------------
+// Created:     Sat Mar 23 19:34:04 2019 by lhada2tnm.py v1.0.3
+//------------------------------------------------------------------
 #include <algorithm>
 #include <iostream>
 #include "TFile.h"
 #include "TH1F.h"
 #include "TEParticle.h"
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 struct lhadaThing
 {
   lhadaThing() {}

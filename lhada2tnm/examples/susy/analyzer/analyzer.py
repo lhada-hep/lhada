@@ -3,7 +3,7 @@
 #  File:        analyzer.py
 #  Description: Analyzer for simple ntuples, such as those created by
 #               TheNtupleMaker
-#  Created:     Tue May 15 14:10:05 2018 by mkanalyzer.py
+#  Created:     Sat Mar 23 17:14:17 2019 by mkanalyzer.py
 #  Author:      Shakespeare's ghost
 # ----------------------------------------------------------------------------
 import os, sys, re

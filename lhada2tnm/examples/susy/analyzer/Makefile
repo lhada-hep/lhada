@@ -1,6 +1,6 @@
 #----------------------------------------------------------------------------
 # Description: Makefile to build analyzers
-# Created:     Fri May 18 15:26:12 2018 by mkanalyzer.py
+# Created:     Sat Mar 23 17:39:05 2019 by mkanalyzer.py v2.0.1 23-Mar-2019
 # Author:      Shakespeare's ghost
 #----------------------------------------------------------------------------
 ifndef ROOTSYS
@@ -68,7 +68,7 @@ CINT	:= rootcint
 #-----------------------------------------------------------------------
 # 	Define paths to be searched for C++ header files (#include ....)
 #-----------------------------------------------------------------------
-CPPFLAGS:= -I. -I$(incdir) -I$(srcdir) $(shell root-config --cflags) 
+CPPFLAGS:= -I. -I$(incdir) -I$(srcdir) $(shell root-config --cflags) $(cppflags)
 
 # 	Define compiler flags to be used
 #	-c		perform compilation step only 

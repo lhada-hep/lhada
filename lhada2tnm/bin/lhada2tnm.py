@@ -16,7 +16,7 @@ import sys, os, re, optparse, urllib
 from time import ctime
 from string import joinfields, split, replace, find, strip, lower, rstrip
 #--------------------------------------------------------------------------------
-VERSION = 'v1.0.2'
+VERSION = 'v1.0.3'
 
 DEBUG = 0
 
@@ -336,29 +336,29 @@ def boohoo(message):
 # Look for header file on given list of search paths
 #------------------------------------------------------------------------------
 def findHeaderFile(infile, incs):
-	file = strip(os.popen("find %s 2>/dev/null" % infile).readline())    
-	if file != "":
-		filepath = file
+	ifile = strip(os.popen("find %s 2>/dev/null" % infile).readline())    
+	if ifile != "":
+		filepath = ifile
 		for includepath in incs:
 			tmp = splitfields(filepath, includepath + '/',1)
 			if len(tmp) == 2:
-				base, file = tmp
+				base, ifile = tmp
 			else:
 				base = ''
-				file = tmp[0]
+				ifile = tmp[0]
 
-			if base == '': return (filepath, file)
+			if base == '': return (filepath, ifile)
 		return (filepath, filepath)
 
-	file = infile
+	ifile = infile
 	for includepath in incs:
-		filepath = includepath + "/" + file
+		filepath = includepath + "/" + ifile
 		filepath = strip(os.popen("find %s 2>/dev/null" % filepath).readline())
-		if filepath != "": return (filepath, file)
+		if filepath != "": return (filepath, ifile)
 
-		filepath = includepath + "/include/" + file
+		filepath = includepath + "/include/" + ifile
 		filepath = strip(os.popen("find %s 2>/dev/null" % filepath).readline())
-		if filepath != "": return (filepath, file)
+		if filepath != "": return (filepath, ifile)
 
 	return ("","")
 #------------------------------------------------------------------------------
@@ -427,7 +427,7 @@ def sortObjects(objects):
     
     # 2) sort remaining blocks so that dependent blocks occur after the
     #    the blocks on which they depend
-    for ii in xrange(len(objects)):
+    for ii in range(len(objects)):
         for t in objects:
             name  = t[0]
             if name == None: continue
@@ -801,27 +801,25 @@ expected arguments %s, but %s found in ADL file
     
     blocks['function_info'] = functions
 #--------------------------------------------------------------------------------
-# check whether we have an implicit loop.
+# check whether we have at least one implicit loop in the current record.
 # we have an implicit loop if the next record contains a variable
 # of the form <objectname>.<variable> and objectname is not
 # a singleton. here a singleton is defined to be an object of which only one
 # occurs per event. for now we do not handle nested implicit loops
 #--------------------------------------------------------------------------------
-def checkForImplicitLoop(records, index, blocktypes):
-    if index >= len(records)-1: return None
+def checkForImplicitLoops(record, blocktypes):
+    loopables = []
         
-    # get words from next record at position "index", including those of the form
-    # <name>.<variable>
-    index  += 1    
-    record  = records[index]
+    # get words from record, including those of the form <name>.<variable>
     words   = set(getvars.findall(record))
     if DEBUG > 0:
-        print "begin-LOOKAHEAD( %s )" % words
+        print "checkForImplicitLoops( %s )" % words
 
     # identify words of the form <name>.<variable> and check if the word
     # <name> appears in the list of non-singleton objects. if it does, then we
-    # assume that we are to loop of name and access its attribute "variable"
+    # assume that we are to loop over name and access one of its attributes
     objectnames = set(blocktypes['object'])
+
     for x in words:
         t = split(x, '.')
         if len(t) > 1:
@@ -830,20 +828,16 @@ def checkForImplicitLoop(records, index, blocktypes):
                 if name in SINGLETON_CACHE:
                     if DEBUG > 0:
                         print "\tfound singleton object( %s )" % name
-                    return None
+                    continue
                 else:
                     if DEBUG > 0:
-                        print "\tloop over object( %s )" % name
-                return name
-    return None
+                        print "\tfound implicit loop over object( %s )" % name
+                    loopables.append(name)
+    return loopables
 #--------------------------------------------------------------------------------
-# convert given ADL record into the corresponding C++ code snippet
-# record:     current ADL record
-# btype:      current ADL block type
-# blocktypes: block types and associated names
-# localvar:   variables local to current block that are not bound to an object.
+# handle cutvectors depending on whether we have a select or a reject
 #--------------------------------------------------------------------------------
-def convert2cpp(record, btype, blocktypes, localvar=set()):
+def fixrecord(record):
     # start with some simple replacements
     record = replace(record, "|", "@")
     record = replace(record, "[", ";:")
@@ -851,12 +845,29 @@ def convert2cpp(record, btype, blocktypes, localvar=set()):
     # replace AND and OR with c++ syntax for the same
     record = cppAND.sub('&&', record)
     record = cppOR.sub('||\n\t', record)
-
     # use a set to avoid recursive edits
     words  = set(getvars.findall(record))
     if DEBUG > 0:
         print "RECORD( %s )" % record
         print "\tWORDS( %s )" % words
+    return (record, words)
+
+def setlogic(record, tab, cutvector, logic_op):
+    t = fixrecord(record)
+    words = t[-1]
+    rec = ''
+    for name in words:    
+        if name in cutvector:
+            rec += '%s%s.logical(%s);\n' % (tab, name, logic_op)
+    return rec
+#--------------------------------------------------------------------------------
+# convert given ADL record into the corresponding C++ code snippet
+# record:     current ADL record
+# btype:      current ADL block type or apply
+# blocktypes: block types and associated names
+#--------------------------------------------------------------------------------
+def convert2cpp(record, btype, blocktypes, cutvector=set()):
+    record, words = fixrecord(record)
         
     for name in words:
         # if this is an object block,
@@ -882,12 +893,13 @@ def convert2cpp(record, btype, blocktypes, localvar=set()):
         field     = t[-1]
         newfield  = field
         oldrecord = record
+        prerecord = ''
         
         # need to handle things like PT and e.PT
         # also need to check for singleton objects
         if btype == 'object':
-            if name in localvar:
-                pass # do nothing; use name as is
+            if name in cutvector:
+                pass # use name as is
             elif undotted:
                 if not a_singleton: oname = "p"
                 edit = re.compile('(?<![.])%s' % field)
@@ -905,9 +917,7 @@ def convert2cpp(record, btype, blocktypes, localvar=set()):
                 print "\t\tnew-record( %s )" % strip(record)
             
         elif btype == 'apply':
-            if name in localvar:
-                pass
-            elif undotted:
+            if undotted:
                 if not a_singleton: oname = "p"
                 edit = re.compile('(?<![.])%s' % field)
                 newfield = '%s("%s")' % (oname, lower(field))
@@ -922,27 +932,7 @@ def convert2cpp(record, btype, blocktypes, localvar=set()):
                 print "\tapply: oname( %s ) field( %s ) newfield( %s )" % \
                 (oname, field, newfield)
                 print "\t\told-record( %s )" % strip(oldrecord)
-                print "\t\tnew-record( %s )" % strip(record)
-
-        elif btype == 'reject':
-            if name in localvar:
-                pass
-            elif undotted:
-                if not a_singleton: oname = "p"
-                edit = re.compile('(?<![.])%s' % field)
-                newfield = '%s("%s")' % (oname, lower(field))
-                record = edit.sub(newfield, record)                
-            else:
-                if not a_singleton: oname = "q"
-                edit = re.compile('\\b%s\\b' % name)
-                newfield = '%s("%s")' % (oname, lower(field))
-                record = edit.sub(newfield, record)                
-            
-            if DEBUG > 0:
-                print "\treject: oname( %s ) field( %s ) newfield( %s )" % \
-                (oname, field, newfield)
-                print "\t\told-record( %s )" % strip(oldrecord)
-                print "\t\tnew-record( %s )" % strip(record)                   
+                print "\t\tnew-record( %s )" % strip(record)               
             
         elif btype == 'cut':
             if undotted:
@@ -978,7 +968,7 @@ def convert2cpp(record, btype, blocktypes, localvar=set()):
     record = replace(record, '@',  '|')
     record = replace(record, ';:', '[')
     record = replace(record, ':;', ']')
-
+    
     if DEBUG > 0:
         print "\t\tcleaned-record( %s )" % record
         print '-'*80
@@ -1005,12 +995,9 @@ def process_multiple_objects(name, records, TAB, blocktypes):
     tab4    = ' '*4
     objdef  = '%s%s.clear();\n' % (tab, name)
 
-    # cache for local variables, such as one returned by a function
-    # call.
-    localvar = set() 
-    
-    # state boolean for handling implicit loops
-    implicit_loop  = False
+    # cache for names of returned vector-valued variables
+    # associated with loopable objects
+    cutvector = set() 
     
     if DEBUG > 0:
         print "\nNAME( %s )" % name
@@ -1024,16 +1011,9 @@ def process_multiple_objects(name, records, TAB, blocktypes):
         if DEBUG > 0:
             print "TOKEN( %s )\tvalue( %s )" % (token, value)
 
-        # we put the check for implicit loops here anticipating that in a
-        # future update, we shall handle implicit loops in select and reject
-        # statements. in the current version of this code, we handle
-        # implicit loops in apply statements, that is, in function calls
-        objname = checkForImplicitLoop(records, index, blocktypes)
-        if objname != None:
-            implicit_loop  = True
-            # cache name of object over which to loop in implicit loop
-            object_name = objname
-            
+        # check for implicit loops in current statement
+        loopables = checkForImplicitLoops(record, blocktypes)
+
         if   token == 'take':
             # --------------------------------------------            
             # TAKE
@@ -1063,7 +1043,7 @@ def process_multiple_objects(name, records, TAB, blocktypes):
             if not function_found:
                 boohoo('please use a function block to declare function %s' % fname)
 
-            rvalue = t[-1]  # name of return value
+            rvalue_name = t[-1]  # name of return value
             
             if fcall[-1] != ')':
                 boohoo('''
@@ -1073,16 +1053,21 @@ perhaps you're missing a return value in:
 ''' % (objdef, record))
 
             a, b = split(fcall, '(')
-            b = convert2cpp(b, 'apply', blocktypes, localvar)
+            b = convert2cpp(b, 'apply', blocktypes)
             a = replace(a, '.', '_')
             fcall = '%s(%s' % (a, b)   # function call
-            # cache name of variable returned by function call,
-            # which can be either a single value or, if we have an
-            # implied loop, multiple values we call a "cutvector"
-            localvar.add(rvalue)
             
-            if implicit_loop:
-                localvar.add(object_name)
+            if loopables != []:
+                # this function call contains an implicit loop and
+                # therefore returns multiple values that we refer to as a
+                # cutvector. we, therefore, need to cache the name of the
+                # cutvector because it is surely used in a subsequent
+                # select or reject statement.
+                cutvector.add(rvalue_name)
+
+                # for now, we handle function calls with a single
+                # implicit loop.
+                object_name = loopables[0]
                 
                 # adjust tab
                 tab = TAB + tab4
@@ -1092,37 +1077,42 @@ perhaps you're missing a return value in:
                     print '     %s' % fcall
                 
                 objdef += '%scutvector<double> %s(%s.size());\n' % (tab,
-                                                                      rvalue,
+                                                                    rvalue_name,
                                                                     object_name)
                 objdef += '%sfor(size_t n=0; n < %s.size(); n++)\n' % \
                 (tab, object_name)
                 objdef += '%s  {\n' % tab
                 objdef += '%s%sTEParticle& q = %s[n];\n' % (tab, tab4, object_name)
-                objdef += '%s%s%s[n] = %s;\n' % (tab, tab4, rvalue, fcall)
+                objdef += '%s%s%s[n] = %s;\n' % (tab, tab4, rvalue_name, fcall)
                 objdef += '%s  }\n' % tab
                 if DEBUG > 0:
                     print '   END( IMPLICIT LOOP )'
-                    
-                # remember to reset implicit loop state
-                # and the tab
-                implicit_loop  = False
+
+                # reset tab
                 tab = TAB
 
         elif token == 'select':
             # --------------------------------------------            
             # SELECT
             # --------------------------------------------
+            # if the current record contains a cutvector variable, then
+            # add a statement to specify whether we should AND or OR the
+            # truth values associated with the cut on each element of the
+            # cutvector. We assume that a select requires every cut be
+            # true, while a reject requires at least one cut be true.
+            objdef += setlogic(value, tab+tab4, cutvector, 'AND')
+            
             objdef += '%s%sif ( !(%s) ) continue;\n' % \
-              (tab, tab4,
-                   convert2cpp(value, 'object', blocktypes, localvar))
+              (tab, tab4, convert2cpp(value, 'object', blocktypes, cutvector))
 
         elif token == 'reject':
             # --------------------------------------------            
             # REJECT
             # --------------------------------------------
+            objdef += setlogic(value, tab+tab4, cutvector, 'OR')
+            
             objdef += '%s%sif ( %s ) continue;\n' % \
-              (tab, tab4,
-                   convert2cpp(value, 'object', blocktypes, localvar))
+              (tab, tab4, convert2cpp(value, 'object', blocktypes, cutvector))
             
     objdef += '%s%s%s.push_back(p);\n' % (tab, tab4, name)
     objdef += '%s  }\n' % tab
@@ -1400,8 +1390,8 @@ def main():
 
     # check if setup.sh has been sourced
     if not os.environ.has_key("LHADA2TNM_PATH"):
-        sys.exit('''
-**lhada2tnm.py** please source setup.sh in lhada2tnm to define
+        boohoo('''
+    please source setup.sh in lhada2tnm to define
     LHADA2TNM_PATH
         then try again!
 ''')
@@ -1414,7 +1404,19 @@ def main():
     names['treename']    = option.treename
     names['adaptername'] = option.adaptername
 
+    # check that src and include directories exist
+    if not os.path.exists('src'):
+        boohoo('src directory not found')
 
+    if not os.path.exists('include'):
+        boohoo('include directory not found')
+
+    if not os.path.exists('include/linkdef.h'):
+        boohoo('include/linkdef not found')        
+
+    if not os.path.exists('Makefile'):
+        boohoo('Makefile not found')
+    
     # copy TEParticle.h, TEParticle.cc, and requested adapter code to local area
     cmd = '''
 cp $LHADA2TNM_PATH/external/include/TEParticle.h include/
@@ -1450,11 +1452,11 @@ cp $LHADA2TNM_PATH/external/src/%(adaptername)s.cc src/
     process_variables(names, blocks)
 
     process_cuts(names,      blocks, blocktypes)
-    
-    # write out C++ code
 
-    os.system('mkdir -p src; mkdir -p include')
-    
+    # --------------------------------------------    
+    # write out C++ code
+    # --------------------------------------------
+
     record = TEMPLATE_CC % names
     open('src/%(name)s_s.cc' % names, 'w').write(record)
 

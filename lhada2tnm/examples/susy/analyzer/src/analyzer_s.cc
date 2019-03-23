@@ -1,6 +1,6 @@
-//---------------------------------------------------------------------------
+//------------------------------------------------------------------
 // File:        analyzer_s.cc
-// Description: Analyzer for LHADA analysis:
+// Description: Analyzer for ADL-based analysis:
 //
 // LHADA file: ../../../doc/ATLASSUSY1605.03814_lhproc.lhada
 // info block
@@ -13,17 +13,17 @@
 //	hepdata     	http://hepdata.cedar.ac.uk/view/ins1304456
 //	doi         	10.1140/epjc/s10052-016-4184-8
 //
-// Created:     Fri May 18 15:33:25 2018 by lhada2tnm.py
-//----------------------------------------------------------------------------
+// Created:     Sat Mar 23 17:39:26 2019 by lhada2tnm.py v1.0.3
+//------------------------------------------------------------------
 #include <algorithm>
 #include "analyzer_s.h"
 #include "ATLASSUSY1605.03814_functions.h"
 
 using namespace std;
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // The following functions, objects, and variables are globally visible
 // within this programming unit.
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 //
 // functions
 inline
@@ -81,7 +81,7 @@ double	_METoversqrtHT(vector<TEParticle>& jetsSR, TLorentzVector& MET)
 };
 
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // variables
 double	dphijNjgt3METmin_;
 double	aplanarity_;
@@ -93,7 +93,7 @@ double	METovermeff2j_;
 double	dphijNjle3METmin_;
 double	METoversqrtHT_;
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // external objects
 vector<TEParticle> Delphes_Muon;
 vector<TEParticle> Delphes_Jet;
@@ -207,19 +207,14 @@ struct object_cleanjets_s : public lhadaThing
     for(size_t c=0; c < jets.size(); c++)
       {
         TEParticle& p = jets[c];
-        bool skip = false;
+        cutvector<double> dRje(electrons.size());
         for(size_t n=0; n < electrons.size(); n++)
           {
             TEParticle& q = electrons[n];
-            double dRje = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
-            p("drje", dRje);
-            if ( p("drje") < 0.2 )
-              {
-                skip = true;
-                break;
-              }
+            dRje[n] = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
           }
-        if ( skip ) continue;
+        dRje.logical(OR);
+        if ( dRje < 0.2 ) continue;
         cleanjets.push_back(p);
       }
   };
@@ -251,19 +246,14 @@ struct object_cleanmuons_s : public lhadaThing
     for(size_t c=0; c < muons.size(); c++)
       {
         TEParticle& p = muons[c];
-        bool skip = false;
+        cutvector<double> dRlj(cleanjets.size());
         for(size_t n=0; n < cleanjets.size(); n++)
           {
             TEParticle& q = cleanjets[n];
-            double dRlj = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
-            p("drlj", dRlj);
-            if ( p("drlj") < 0.4 )
-              {
-                skip = true;
-                break;
-              }
+            dRlj[n] = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
           }
-        if ( skip ) continue;
+        dRlj.logical(OR);
+        if ( dRlj < 0.4 ) continue;
         cleanmuons.push_back(p);
       }
   };
@@ -279,19 +269,14 @@ struct object_cleanelectrons_s : public lhadaThing
     for(size_t c=0; c < electrons.size(); c++)
       {
         TEParticle& p = electrons[c];
-        bool skip = false;
+        cutvector<double> dRlj(cleanjets.size());
         for(size_t n=0; n < cleanjets.size(); n++)
           {
             TEParticle& q = cleanjets[n];
-            double dRlj = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
-            p("drlj", dRlj);
-            if ( p("drlj") < 0.4 )
-              {
-                skip = true;
-                break;
-              }
+            dRlj[n] = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
           }
-        if ( skip ) continue;
+        dRlj.logical(OR);
+        if ( dRlj < 0.4 ) continue;
         cleanelectrons.push_back(p);
       }
   };
@@ -307,26 +292,21 @@ struct object_verycleanelectrons_s : public lhadaThing
     for(size_t c=0; c < cleanelectrons.size(); c++)
       {
         TEParticle& p = cleanelectrons[c];
-        bool skip = false;
+        cutvector<double> dRee(cleanelectrons.size());
         for(size_t n=0; n < cleanelectrons.size(); n++)
           {
             TEParticle& q = cleanelectrons[n];
-            double dRee = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
-            p("dree", dRee);
-            if ( (p("dree") < 0.05) && (p("pt") < q("pt")) )
-              {
-                skip = true;
-                break;
-              }
+            dRee[n] = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
           }
-        if ( skip ) continue;
+        dRee.logical(OR);
+        if ( (dRee < 0.05) ) continue;
         verycleanelectrons.push_back(p);
       }
   };
 } object_verycleanelectrons;
 
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // selections
 struct cut_preselection_s : public lhadaThing
 {
@@ -1217,7 +1197,7 @@ struct cut_4jt_s : public lhadaThing
 } cut_4jt;
 
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 analyzer_s::analyzer_s()
 {
   // cache pointers to filtered objects

@@ -29,23 +29,8 @@
 #pragma link C++ class otreestream;
 #pragma link C++ class eventBuffer;
 
-#pragma link C++ class eventBuffer::EFlowNeutralHadron_s;
-#pragma link C++ class vector<eventBuffer::EFlowNeutralHadron_s>;
-
-#pragma link C++ class eventBuffer::EFlowPhoton_s;
-#pragma link C++ class vector<eventBuffer::EFlowPhoton_s>;
-
-#pragma link C++ class eventBuffer::EFlowTrack_s;
-#pragma link C++ class vector<eventBuffer::EFlowTrack_s>;
-
 #pragma link C++ class eventBuffer::Electron_s;
 #pragma link C++ class vector<eventBuffer::Electron_s>;
-
-#pragma link C++ class eventBuffer::FatJet_s;
-#pragma link C++ class vector<eventBuffer::FatJet_s>;
-
-#pragma link C++ class eventBuffer::GenJet_s;
-#pragma link C++ class vector<eventBuffer::GenJet_s>;
 
 #pragma link C++ class eventBuffer::Jet_s;
 #pragma link C++ class vector<eventBuffer::Jet_s>;
@@ -53,17 +38,8 @@
 #pragma link C++ class eventBuffer::Muon_s;
 #pragma link C++ class vector<eventBuffer::Muon_s>;
 
-#pragma link C++ class eventBuffer::Particle_s;
-#pragma link C++ class vector<eventBuffer::Particle_s>;
-
 #pragma link C++ class eventBuffer::Photon_s;
 #pragma link C++ class vector<eventBuffer::Photon_s>;
-
-#pragma link C++ class eventBuffer::Tower_s;
-#pragma link C++ class vector<eventBuffer::Tower_s>;
-
-#pragma link C++ class eventBuffer::Track_s;
-#pragma link C++ class vector<eventBuffer::Track_s>;
 
 
 #pragma link C++ class lhadaThing;

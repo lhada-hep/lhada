@@ -3,7 +3,7 @@
 //----------------------------------------------------------------------------
 // File:        eventBuffer.h
 // Description: Analyzer header for ntuples created by TheNtupleMaker
-// Created:     Tue May 15 14:05:07 2018 by mkanalyzer.py
+// Created:     Sat Mar 23 19:33:37 2019 by mkanalyzer.py v2.0.1 23-Mar-2019
 // Author:      Shakespeare's ghost
 //----------------------------------------------------------------------------
 #include <stdio.h>
@@ -36,19 +36,19 @@ struct eventBuffer
   std::vector<float>	Electron_SumPtChargedPU;
   std::vector<float>	Electron_SumPtNeutral;
   std::vector<float>	Electron_T;
-  std::vector<int>	Electron_fBits;
-  std::vector<int>	Electron_fUniqueID;
-  std::vector<int>	Jet_Area_fBits;
+  std::vector<unsigned int>	Electron_fBits;
+  std::vector<unsigned int>	Electron_fUniqueID;
+  std::vector<unsigned int>	Jet_Area_fBits;
   std::vector<double>	Jet_Area_fE;
-  std::vector<int>	Jet_Area_fP_fBits;
-  std::vector<int>	Jet_Area_fP_fUniqueID;
+  std::vector<unsigned int>	Jet_Area_fP_fBits;
+  std::vector<unsigned int>	Jet_Area_fP_fUniqueID;
   std::vector<double>	Jet_Area_fP_fX;
   std::vector<double>	Jet_Area_fP_fY;
   std::vector<double>	Jet_Area_fP_fZ;
-  std::vector<int>	Jet_Area_fUniqueID;
-  std::vector<int>	Jet_BTag;
-  std::vector<int>	Jet_BTagAlgo;
-  std::vector<int>	Jet_BTagPhys;
+  std::vector<unsigned int>	Jet_Area_fUniqueID;
+  std::vector<unsigned int>	Jet_BTag;
+  std::vector<unsigned int>	Jet_BTagAlgo;
+  std::vector<unsigned int>	Jet_BTagPhys;
   std::vector<float>	Jet_Beta;
   std::vector<float>	Jet_BetaStar;
   std::vector<int>	Jet_Charge;
@@ -56,9 +56,9 @@ struct eventBuffer
   std::vector<float>	Jet_DeltaPhi;
   std::vector<float>	Jet_EhadOverEem;
   std::vector<float>	Jet_Eta;
-  std::vector<int>	Jet_Flavor;
-  std::vector<int>	Jet_FlavorAlgo;
-  std::vector<int>	Jet_FlavorPhys;
+  std::vector<unsigned int>	Jet_Flavor;
+  std::vector<unsigned int>	Jet_FlavorAlgo;
+  std::vector<unsigned int>	Jet_FlavorPhys;
   std::vector<float>	Jet_Mass;
   std::vector<float>	Jet_MeanSqDeltaR;
   std::vector<int>	Jet_NCharged;
@@ -70,9 +70,9 @@ struct eventBuffer
   std::vector<float>	Jet_PTD;
   std::vector<float>	Jet_Phi;
   std::vector<float>	Jet_T;
-  std::vector<int>	Jet_TauTag;
-  std::vector<int>	Jet_fBits;
-  std::vector<int>	Jet_fUniqueID;
+  std::vector<unsigned int>	Jet_TauTag;
+  std::vector<unsigned int>	Jet_fBits;
+  std::vector<unsigned int>	Jet_fUniqueID;
   std::vector<int>	Muon_Charge;
   std::vector<float>	Muon_Eta;
   std::vector<float>	Muon_IsolationVar;
@@ -84,8 +84,8 @@ struct eventBuffer
   std::vector<float>	Muon_SumPtChargedPU;
   std::vector<float>	Muon_SumPtNeutral;
   std::vector<float>	Muon_T;
-  std::vector<int>	Muon_fBits;
-  std::vector<int>	Muon_fUniqueID;
+  std::vector<unsigned int>	Muon_fBits;
+  std::vector<unsigned int>	Muon_fUniqueID;
   std::vector<float>	Photon_E;
   std::vector<float>	Photon_EhadOverEem;
   std::vector<float>	Photon_Eta;
@@ -98,8 +98,8 @@ struct eventBuffer
   std::vector<float>	Photon_SumPtChargedPU;
   std::vector<float>	Photon_SumPtNeutral;
   std::vector<float>	Photon_T;
-  std::vector<int>	Photon_fBits;
-  std::vector<int>	Photon_fUniqueID;
+  std::vector<unsigned int>	Photon_fBits;
+  std::vector<unsigned int>	Photon_fUniqueID;
 
   int	MissingET_;
   int	Photon_;
@@ -126,21 +126,21 @@ struct eventBuffer
   float	Event_Weight;
   float	Event_X1;
   float	Event_X2;
-  int	Event_fBits;
-  int	Event_fUniqueID;
+  unsigned int	Event_fBits;
+  unsigned int	Event_fUniqueID;
   int	Event_size;
   int	Jet_size;
   float	MissingET_Eta;
   float	MissingET_MET;
   float	MissingET_Phi;
-  int	MissingET_fBits;
-  int	MissingET_fUniqueID;
+  unsigned int	MissingET_fBits;
+  unsigned int	MissingET_fUniqueID;
   int	MissingET_size;
   int	Muon_size;
   int	Photon_size;
   float	ScalarHT_HT;
-  int	ScalarHT_fBits;
-  int	ScalarHT_fUniqueID;
+  unsigned int	ScalarHT_fBits;
+  unsigned int	ScalarHT_fUniqueID;
   int	ScalarHT_size;
 
   //--------------------------------------------------------------------------
@@ -162,8 +162,8 @@ struct eventBuffer
     float	SumPtChargedPU;
     float	SumPtNeutral;
     float	T;
-    int	fBits;
-    int	fUniqueID;
+    unsigned int	fBits;
+    unsigned int	fUniqueID;
 
     std::ostream& operator<<(std::ostream& os)
     {
@@ -189,17 +189,17 @@ struct eventBuffer
 
   struct Jet_s
   {
-    int	Area_fBits;
+    unsigned int	Area_fBits;
     double	Area_fE;
-    int	Area_fP_fBits;
-    int	Area_fP_fUniqueID;
+    unsigned int	Area_fP_fBits;
+    unsigned int	Area_fP_fUniqueID;
     double	Area_fP_fX;
     double	Area_fP_fY;
     double	Area_fP_fZ;
-    int	Area_fUniqueID;
-    int	BTag;
-    int	BTagAlgo;
-    int	BTagPhys;
+    unsigned int	Area_fUniqueID;
+    unsigned int	BTag;
+    unsigned int	BTagAlgo;
+    unsigned int	BTagPhys;
     float	Beta;
     float	BetaStar;
     int	Charge;
@@ -207,9 +207,9 @@ struct eventBuffer
     float	DeltaPhi;
     float	EhadOverEem;
     float	Eta;
-    int	Flavor;
-    int	FlavorAlgo;
-    int	FlavorPhys;
+    unsigned int	Flavor;
+    unsigned int	FlavorAlgo;
+    unsigned int	FlavorPhys;
     float	Mass;
     float	MeanSqDeltaR;
     int	NCharged;
@@ -221,9 +221,9 @@ struct eventBuffer
     float	PTD;
     float	Phi;
     float	T;
-    int	TauTag;
-    int	fBits;
-    int	fUniqueID;
+    unsigned int	TauTag;
+    unsigned int	fBits;
+    unsigned int	fUniqueID;
 
     std::ostream& operator<<(std::ostream& os)
     {
@@ -281,8 +281,8 @@ struct eventBuffer
     float	SumPtChargedPU;
     float	SumPtNeutral;
     float	T;
-    int	fBits;
-    int	fUniqueID;
+    unsigned int	fBits;
+    unsigned int	fUniqueID;
 
     std::ostream& operator<<(std::ostream& os)
     {
@@ -319,8 +319,8 @@ struct eventBuffer
     float	SumPtChargedPU;
     float	SumPtNeutral;
     float	T;
-    int	fBits;
-    int	fUniqueID;
+    unsigned int	fBits;
+    unsigned int	fUniqueID;
 
     std::ostream& operator<<(std::ostream& os)
     {
@@ -1168,19 +1168,19 @@ struct eventBuffer
     Electron_SumPtChargedPU	= std::vector<float>(10,0);
     Electron_SumPtNeutral	= std::vector<float>(10,0);
     Electron_T	= std::vector<float>(10,0);
-    Electron_fBits	= std::vector<int>(10,0);
-    Electron_fUniqueID	= std::vector<int>(10,0);
-    Jet_Area_fBits	= std::vector<int>(25,0);
+    Electron_fBits	= std::vector<unsigned int>(10,0);
+    Electron_fUniqueID	= std::vector<unsigned int>(10,0);
+    Jet_Area_fBits	= std::vector<unsigned int>(25,0);
     Jet_Area_fE	= std::vector<double>(25,0);
-    Jet_Area_fP_fBits	= std::vector<int>(25,0);
-    Jet_Area_fP_fUniqueID	= std::vector<int>(25,0);
+    Jet_Area_fP_fBits	= std::vector<unsigned int>(25,0);
+    Jet_Area_fP_fUniqueID	= std::vector<unsigned int>(25,0);
     Jet_Area_fP_fX	= std::vector<double>(25,0);
     Jet_Area_fP_fY	= std::vector<double>(25,0);
     Jet_Area_fP_fZ	= std::vector<double>(25,0);
-    Jet_Area_fUniqueID	= std::vector<int>(25,0);
-    Jet_BTag	= std::vector<int>(25,0);
-    Jet_BTagAlgo	= std::vector<int>(25,0);
-    Jet_BTagPhys	= std::vector<int>(25,0);
+    Jet_Area_fUniqueID	= std::vector<unsigned int>(25,0);
+    Jet_BTag	= std::vector<unsigned int>(25,0);
+    Jet_BTagAlgo	= std::vector<unsigned int>(25,0);
+    Jet_BTagPhys	= std::vector<unsigned int>(25,0);
     Jet_Beta	= std::vector<float>(25,0);
     Jet_BetaStar	= std::vector<float>(25,0);
     Jet_Charge	= std::vector<int>(25,0);
@@ -1188,9 +1188,9 @@ struct eventBuffer
     Jet_DeltaPhi	= std::vector<float>(25,0);
     Jet_EhadOverEem	= std::vector<float>(25,0);
     Jet_Eta	= std::vector<float>(25,0);
-    Jet_Flavor	= std::vector<int>(25,0);
-    Jet_FlavorAlgo	= std::vector<int>(25,0);
-    Jet_FlavorPhys	= std::vector<int>(25,0);
+    Jet_Flavor	= std::vector<unsigned int>(25,0);
+    Jet_FlavorAlgo	= std::vector<unsigned int>(25,0);
+    Jet_FlavorPhys	= std::vector<unsigned int>(25,0);
     Jet_Mass	= std::vector<float>(25,0);
     Jet_MeanSqDeltaR	= std::vector<float>(25,0);
     Jet_NCharged	= std::vector<int>(25,0);
@@ -1202,9 +1202,9 @@ struct eventBuffer
     Jet_PTD	= std::vector<float>(25,0);
     Jet_Phi	= std::vector<float>(25,0);
     Jet_T	= std::vector<float>(25,0);
-    Jet_TauTag	= std::vector<int>(25,0);
-    Jet_fBits	= std::vector<int>(25,0);
-    Jet_fUniqueID	= std::vector<int>(25,0);
+    Jet_TauTag	= std::vector<unsigned int>(25,0);
+    Jet_fBits	= std::vector<unsigned int>(25,0);
+    Jet_fUniqueID	= std::vector<unsigned int>(25,0);
     Muon_Charge	= std::vector<int>(10,0);
     Muon_Eta	= std::vector<float>(10,0);
     Muon_IsolationVar	= std::vector<float>(10,0);
@@ -1216,8 +1216,8 @@ struct eventBuffer
     Muon_SumPtChargedPU	= std::vector<float>(10,0);
     Muon_SumPtNeutral	= std::vector<float>(10,0);
     Muon_T	= std::vector<float>(10,0);
-    Muon_fBits	= std::vector<int>(10,0);
-    Muon_fUniqueID	= std::vector<int>(10,0);
+    Muon_fBits	= std::vector<unsigned int>(10,0);
+    Muon_fUniqueID	= std::vector<unsigned int>(10,0);
     Photon_E	= std::vector<float>(15,0);
     Photon_EhadOverEem	= std::vector<float>(15,0);
     Photon_Eta	= std::vector<float>(15,0);
@@ -1230,8 +1230,8 @@ struct eventBuffer
     Photon_SumPtChargedPU	= std::vector<float>(15,0);
     Photon_SumPtNeutral	= std::vector<float>(15,0);
     Photon_T	= std::vector<float>(15,0);
-    Photon_fBits	= std::vector<int>(15,0);
-    Photon_fUniqueID	= std::vector<int>(15,0);
+    Photon_fBits	= std::vector<unsigned int>(15,0);
+    Photon_fUniqueID	= std::vector<unsigned int>(15,0);
     Electron	= std::vector<eventBuffer::Electron_s>(10);
     Jet	= std::vector<eventBuffer::Jet_s>(25);
     Muon	= std::vector<eventBuffer::Muon_s>(10);

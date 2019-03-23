@@ -13,31 +13,88 @@
 #include "TROOT.h"
 #include "TLorentzVector.h"
 // ---------------------------------------------------------------------------
+namespace {
+  enum LOGIC {OR, AND};
+};
+
 template <class T>
 class cutvector : public std::vector<T>
 {
  public:
-  cutvector<T>() : std::vector<T>() {}
-  cutvector<T>(size_t n) : std::vector<T>(n, 0) {}
+  cutvector<T>() : std::vector<T>(), logic(AND) {}
+  cutvector<T>(size_t n) : std::vector<T>(n, 0), logic(AND) {};
   ~cutvector<T>() {}
 
-  bool operator<(T x)
+  void logical(LOGIC logic_)
   {
-    bool value=true;
-    for(size_t c=0; c < this->size(); c++)
-      value = value && ((*this)[c] < x);
-    return value;
+    logic = logic_;
   }
 
-  bool operator>(T x)
-  {
-    bool value=true;
-    for(size_t c=0; c < this->size(); c++)
-      value = value && ((*this)[c] > x);
-    return value;
-  }
+  LOGIC logic;
 };
- 
+
+template <class X, class Y>
+bool operator<(cutvector<X> const& x, Y const& y)
+{
+  bool value;
+  switch(x.logic)
+    {
+    case OR:  value = false;
+      break;
+    case AND: value = true;
+      break;
+    };
+
+  for(size_t c=0; c < x.size(); c++)
+    {
+      switch(x.logic)
+	{
+	case OR:  value = value || (x[c] < static_cast<X>(y));
+	  break;
+	case AND: value = value && (x[c] < static_cast<X>(y));
+	  break;
+	}
+    }
+  return value;
+}
+
+template <class X, class Y>
+bool operator>(cutvector<X> const& x, Y const& y)
+{
+  bool value;
+  switch(x.logic)
+    {
+    case OR:  value = false;
+      break;
+    case AND: value = true;
+      break;
+    };
+
+  for(size_t c=0; c < x.size(); c++)
+    {
+      switch(x.logic)
+	{
+	case OR:  value = value || (x[c] > static_cast<X>(y));
+	  break;
+	case AND: value = value && (x[c] > static_cast<X>(y));
+	  break;
+	}
+    }
+  return value;
+}
+
+template <class X, class Y>
+bool operator<(X const& x, cutvector<Y> const& y)
+{
+  return y > x;
+}
+
+template <class X, class Y>
+bool operator>(X const& x, cutvector<Y> const& y)
+{
+  return y < x;
+}
+
 struct TEParticle : public TLorentzVector
 {
   TEParticle();

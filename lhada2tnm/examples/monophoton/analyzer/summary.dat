@@ -25,48 +25,50 @@ lhprocsel
   3 tightphotons.size > 0                        :  93341.00 +/- 305.5  0.622
   4 tightphotons[0].PT > 150                     :  81688.00 +/- 285.8  0.545
   5 dPhi(tightphotons[0].Phi, MET.Phi) > 0.4     :  81577.00 +/- 285.6  0.544
-  6 METoverSqrtSumET > 8.5                       :  79783.00 +/- 282.5  0.532
-  7 cleanmuons.size == 0                         :  79779.00 +/- 282.5  0.532
-  8 cleanelectrons.size == 0                     :  79765.00 +/- 282.4  0.532
+  6 METoverSqrtSumET > 8.5                       :  81577.00 +/- 285.6  0.544
+  7 jetsSR.size < 2                              :  81577.00 +/- 285.6  0.544
+  8 cleanmuons.size == 0                         :  81571.00 +/- 285.6  0.544
+  9 cleanelectrons.size == 0                     :  81557.00 +/- 285.6  0.544
 
 preselection
   1 none                                         : 150000.00 +/- 387.3  1.000
   2 tightphotons.size > 0                        : 117746.00 +/- 343.1  0.785
   3 tightphotons[0].PT > 150                     :  93356.00 +/- 305.5  0.622
   4 dPhi(tightphotons[0].Phi, MET.Phi) > 0.4     :  93118.00 +/- 305.2  0.621
-  5 METoverSqrtSumET > 8.5                       :  84190.00 +/- 290.2  0.561
-  6 cleanmuons.size == 0                         :  84186.00 +/- 290.1  0.561
-  7 cleanelectrons.size == 0                     :  84172.00 +/- 290.1  0.561
+  5 METoverSqrtSumET > 8.5                       :  93118.00 +/- 305.2  0.621
+  6 jetsSR.size < 1                              :  93118.00 +/- 305.2  0.621
+  7 cleanmuons.size == 0                         :  93109.00 +/- 305.1  0.621
+  8 cleanelectrons.size == 0                     :  93090.00 +/- 305.1  0.621
 
 SRE2
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  84172.00 +/- 290.1  0.561
-  3 MET.PT > 225 and MET.PT < 300                :  21004.00 +/- 144.9  0.140
+  2 preselection                                 :  93090.00 +/- 305.1  0.621
+  3 (MET.PT > 225) and (MET.PT < 300)            :  21118.00 +/- 145.3  0.141
 
 SRI1
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  84172.00 +/- 290.1  0.561
-  3 MET.PT > 150                                 :  79765.00 +/- 282.4  0.532
+  2 preselection                                 :  93090.00 +/- 305.1  0.621
+  3 MET.PT > 150                                 :  81557.00 +/- 285.6  0.544
 
 SRI2
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  84172.00 +/- 290.1  0.561
-  3 MET.PT > 225                                 :  44853.00 +/- 211.8  0.299
+  2 preselection                                 :  93090.00 +/- 305.1  0.621
+  3 MET.PT > 225                                 :  44973.00 +/- 212.1  0.300
 
 SRI3
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  84172.00 +/- 290.1  0.561
-  3 MET.PT > 300                                 :  23849.00 +/- 154.4  0.159
+  2 preselection                                 :  93090.00 +/- 305.1  0.621
+  3 MET.PT > 300                                 :  23855.00 +/- 154.5  0.159
 
 SRE1
   1 none                                         : 150000.00 +/- 387.3  1.000
-  2 preselection                                 :  84172.00 +/- 290.1  0.561
-  3 MET.PT > 150 and MET.PT < 225                :  34912.00 +/- 186.8  0.233
+  2 preselection                                 :  93090.00 +/- 305.1  0.621
+  3 (MET.PT > 150) and (MET.PT < 225)            :  36584.00 +/- 191.3  0.244
 
 ==> histograms saved to file analyzer_histograms.root
 TFile**		analyzer_histograms.root	
  TFile*		analyzer_histograms.root	
-  OBJ: TH1F	counts	 : 0 at: 0x7feed3e3d100
+  OBJ: TH1F	counts	 : 0 at: 0x7fa76bb9df90
   KEY: TH1F	cutflow_lhprocsel;1	
   KEY: TH1F	cutflow_preselection;1	
   KEY: TH1F	cutflow_SRE2;1	

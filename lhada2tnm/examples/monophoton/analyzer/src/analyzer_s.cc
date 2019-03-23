@@ -1,6 +1,6 @@
-//---------------------------------------------------------------------------
+//------------------------------------------------------------------
 // File:        analyzer_s.cc
-// Description: Analyzer for LHADA analysis:
+// Description: Analyzer for ADL-based analysis:
 //
 // LHADA file: ../../../doc/ATLASEXOT1704.0384_Delphes.lhada
 // info block
@@ -13,18 +13,18 @@
 //	hepdata     	https://www.hepdata.net/record/ins1591328
 //	doi         	10.1140/epjc/s10052-017-4965-8
 //
-// Created:     Fri May 18 15:57:11 2018 by lhada2tnm.py
-//----------------------------------------------------------------------------
+// Created:     Sat Mar 23 19:34:04 2019 by lhada2tnm.py v1.0.3
+//------------------------------------------------------------------
 #include <algorithm>
 #include "analyzer_s.h"
 #include "ATLASSUSY1605.03814_functions.h"
 #include "ATLASEXOT1704.0384_functions.h"
 
 using namespace std;
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // The following functions, objects, and variables are globally visible
 // within this programming unit.
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 //
 // functions
 inline
@@ -54,11 +54,11 @@ double	_dPhi(double Phi1, double Phi2)
 };
 
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // variables
 double	METoverSqrtSumET_;
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // external objects
 
 TEParticle Delphes_scalarHT;
@@ -205,19 +205,14 @@ struct object_cleanjets_s : public lhadaThing
     for(size_t c=0; c < jets.size(); c++)
       {
         TEParticle& p = jets[c];
-        bool skip = false;
+        cutvector<double> dRje(electrons.size());
         for(size_t n=0; n < electrons.size(); n++)
           {
             TEParticle& q = electrons[n];
-            double dRje = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
-            p("drje", dRje);
-            if ( p("drje") < 0.2 )
-              {
-                skip = true;
-                break;
-              }
+            dRje[n] = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
           }
-        if ( skip ) continue;
+        dRje.logical(AND);
+        if ( !(dRje > 0.2) ) continue;
         cleanjets.push_back(p);
       }
   };
@@ -233,19 +228,14 @@ struct object_cleanelectrons_s : public lhadaThing
     for(size_t c=0; c < electrons.size(); c++)
       {
         TEParticle& p = electrons[c];
-        bool skip = false;
+        cutvector<double> dRej(cleanjets.size());
         for(size_t n=0; n < cleanjets.size(); n++)
           {
             TEParticle& q = cleanjets[n];
-            double dRej = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
-            p("drej", dRej);
-            if ( p("drej") < 0.4 )
-              {
-                skip = true;
-                break;
-              }
+            dRej[n] = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
           }
-        if ( skip ) continue;
+        dRej.logical(AND);
+        if ( !(dRej > 0.4) ) continue;
         cleanelectrons.push_back(p);
       }
   };
@@ -262,22 +252,15 @@ struct object_jetsSR_s : public lhadaThing
       {
         TEParticle& p = cleanjets[c];
         if ( !(p("pt") > 30) ) continue;
-        bool skip = false;
+        cutvector<double> dRjp(photons.size());
         for(size_t n=0; n < photons.size(); n++)
           {
             TEParticle& q = photons[n];
-            double dRjp = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
-            p("drjp", dRjp);
-            if ( p("drjp") < 0.4 )
-              {
-                skip = true;
-                break;
-              }
+            dRjp[n] = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
           }
-        if ( skip ) continue;
-        double dphijmet = _dPhi(p("phi"), MET("phi"));
-        p("dphijmet", dphijmet);
-        if ( p("dphijmet") < 0.4 ) continue;
+        dRjp.logical(AND);
+        if ( !(dRjp > 0.4) ) continue;
+        if ( !(p("dphijmet") > 0.4) ) continue;
         jetsSR.push_back(p);
       }
   };
@@ -293,26 +276,21 @@ struct object_cleanmuons_s : public lhadaThing
     for(size_t c=0; c < muons.size(); c++)
       {
         TEParticle& p = muons[c];
-        bool skip = false;
+        cutvector<double> dRmuj(cleanjets.size());
         for(size_t n=0; n < cleanjets.size(); n++)
           {
             TEParticle& q = cleanjets[n];
-            double dRmuj = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
-            p("drmuj", dRmuj);
-            if ( p("drmuj") < 0.4 )
-              {
-                skip = true;
-                break;
-              }
+            dRmuj[n] = _dR(p("eta"), p("phi"), q("eta"), q("phi"));
           }
-        if ( skip ) continue;
+        dRmuj.logical(AND);
+        if ( !(dRmuj > 0.4) ) continue;
         cleanmuons.push_back(p);
       }
   };
 } object_cleanmuons;
 
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 // selections
 struct cut_lhprocsel_s : public lhadaThing
 {
@@ -335,7 +313,7 @@ struct cut_lhprocsel_s : public lhadaThing
       done(false),
       result(false),
       weight(1),
-      ncuts(7)
+      ncuts(8)
   {
     hcount = new TH1F("cutflow_lhprocsel", "", 1, 0, 1);
     hcount->SetCanExtend(1);
@@ -348,6 +326,7 @@ struct cut_lhprocsel_s : public lhadaThing
     hcount->Fill("tightphotons[0].PT > 150", 0);
     hcount->Fill("dPhi(tightphotons[0].Phi, MET.Phi) > 0.4", 0);
     hcount->Fill("METoverSqrtSumET > 8.5", 0);
+    hcount->Fill("jetsSR.size < 2", 0);
     hcount->Fill("cleanmuons.size == 0", 0);
     hcount->Fill("cleanelectrons.size == 0", 0);
   }
@@ -401,6 +380,9 @@ struct cut_lhprocsel_s : public lhadaThing
     if ( !(METoverSqrtSumET_ > 8.5) ) return false;
     count("METoverSqrtSumET > 8.5");
 
+    if ( !(jetsSR.size() < 2) ) return false;
+    count("jetsSR.size < 2");
+
     if ( !(cleanmuons.size() == 0) ) return false;
     count("cleanmuons.size == 0");
 
@@ -437,7 +419,7 @@ struct cut_preselection_s : public lhadaThing
       done(false),
       result(false),
       weight(1),
-      ncuts(6)
+      ncuts(7)
   {
     hcount = new TH1F("cutflow_preselection", "", 1, 0, 1);
     hcount->SetCanExtend(1);
@@ -449,6 +431,7 @@ struct cut_preselection_s : public lhadaThing
     hcount->Fill("tightphotons[0].PT > 150", 0);
     hcount->Fill("dPhi(tightphotons[0].Phi, MET.Phi) > 0.4", 0);
     hcount->Fill("METoverSqrtSumET > 8.5", 0);
+    hcount->Fill("jetsSR.size < 1", 0);
     hcount->Fill("cleanmuons.size == 0", 0);
     hcount->Fill("cleanelectrons.size == 0", 0);
   }
@@ -499,6 +482,9 @@ struct cut_preselection_s : public lhadaThing
     if ( !(METoverSqrtSumET_ > 8.5) ) return false;
     count("METoverSqrtSumET > 8.5");
 
+    if ( !(jetsSR.size() < 1) ) return false;
+    count("jetsSR.size < 1");
+
     if ( !(cleanmuons.size() == 0) ) return false;
     count("cleanmuons.size == 0");
 
@@ -544,7 +530,7 @@ struct cut_SRE2_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("MET.PT > 225 and MET.PT < 300", 0);
+    hcount->Fill("(MET.PT > 225) and (MET.PT < 300)", 0);
   }
 
   ~cut_SRE2_s() {}
@@ -584,8 +570,8 @@ struct cut_SRE2_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
-    if ( !(MET("pt") > 225 && MET("pt") < 300) ) return false;
-    count("MET.PT > 225 and MET.PT < 300");
+    if ( !((MET("pt") > 225) && (MET("pt") < 300)) ) return false;
+    count("(MET.PT > 225) and (MET.PT < 300)");
 
     total  += weight;
     dtotal += weight * weight;
@@ -872,7 +858,7 @@ struct cut_SRE1_s : public lhadaThing
 
     hcount->Fill("none", 0);
     hcount->Fill("preselection", 0);
-    hcount->Fill("MET.PT > 150 and MET.PT < 225", 0);
+    hcount->Fill("(MET.PT > 150) and (MET.PT < 225)", 0);
   }
 
   ~cut_SRE1_s() {}
@@ -912,8 +898,8 @@ struct cut_SRE1_s : public lhadaThing
     if ( !(cut_preselection()) ) return false;
     count("preselection");
 
-    if ( !(MET("pt") > 150 && MET("pt") < 225) ) return false;
-    count("MET.PT > 150 and MET.PT < 225");
+    if ( !((MET("pt") > 150) && (MET("pt") < 225)) ) return false;
+    count("(MET.PT > 150) and (MET.PT < 225)");
 
     total  += weight;
     dtotal += weight * weight;
@@ -925,7 +911,7 @@ struct cut_SRE1_s : public lhadaThing
 } cut_SRE1;
 
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------
 analyzer_s::analyzer_s()
 {
   // cache pointers to filtered objects

@@ -47,6 +47,9 @@
 //                      mechanism
 //          22-Nov-2011 Handle storing of strings
 //          01-Mar-2018 Fix chain/friend interactions (at 35,000 feet!)
+//          23-Sep-2018 split into itreestream.h and otreestream.h
+//          25-Sep-2018 HBP - go back to a single header to avoid problems
+//                      with mkanalyzer.py
 //----------------------------------------------------------------------------
 #include <vector>
 #include <string>
@@ -57,16 +60,12 @@
 #include <typeinfo>
 #include <cctype>
 
-
 #include "TFile.h"
 #include "TTree.h"
 #include "TLeaf.h"
 #include "TBranch.h"
 #include "TChain.h"
-
-/** \example readit.py
- */
-
+//----------------------------------------------------------------------------
 /// Model a name/value pair.
 struct Field
 {
@@ -117,6 +116,7 @@ struct FieldBuffer : public Field
 typedef std::map<std::string, Field>  Data;
 typedef std::map<std::string, Field*> SelectedData;
 
+//----------------------------------------------------------------------------
 
 /** Model an input stream of Root trees.
               The classes itreestream and otreestream provide a convenient 
@@ -227,9 +227,6 @@ class itreestream
 
   ///
   void   select(std::string namen, std::string& datum);
-
-//   ///
-//   void   select(std::string namen, std::string& datum);
 
   /** Specify the name of a vector-valued variable to be read and give the
       address of a buffer into which its values are to be written. 
@@ -366,6 +363,10 @@ class itreestream
   std::vector<std::string>  _treenames;
 };
 
+std::ostream& operator<<(std::ostream& os, const itreestream& tuple);
+
+//----------------------------------------------------------------------------
+
 /// Model an output stream of trees of the same species.
 class otreestream
 {
@@ -395,6 +396,30 @@ class otreestream
   ///
   int    status();
 
+  ///
+  void   add(std::string namen, int& datum);
+  
+  ///
+  void   add(std::string namen, unsigned int& datum);
+
+  ///
+  void   add(std::string namen, long& datum);
+
+  ///
+  //void   add(std::string namen, unsigned long& datum);
+  
+  ///
+  void   add(std::string namen, short& datum);
+  
+  ///
+  void   add(std::string namen, unsigned short& datum);
+
+  ///
+  //void   add(std::string namen, char& datum);
+
+  ///
+  void   add(std::string namen, bool& datum);
+
   /** Specify the name of a variable to be added to the tree and the address 
       from which its value is to be read. 
   */
@@ -402,30 +427,6 @@ class otreestream
 
   ///
   void   add(std::string namen, float& datum);
-
-  ///
-  void   add(std::string namen, long& datum);
-
-  ///
-  void   add(std::string namen, int& datum);
-
-  ///
-  void   add(std::string namen, short& datum);
-
-  ///
-  void   add(std::string namen, char& datum);
-
-  ///
-  void   add(std::string namen, bool& datum);
-
-  ///
-  void   add(std::string namen, unsigned long& datum);
-
-  ///
-  void   add(std::string namen, unsigned int& datum);
-
-  ///
-  void   add(std::string namen, unsigned short& datum);
 
   ///
   void   add(std::string namen, std::string& datum);
@@ -438,12 +439,6 @@ class otreestream
       For a variable of fixed length use e.g., 
       JetEt[10].
   */
-  void   add(std::string namen, std::vector<double>& data, char iotype='D');
-
-  ///
-  void   add(std::string namen, std::vector<float>& data);
-
-  ///
   void   add(std::string namen, std::vector<long>& data);
 
   ///
@@ -453,19 +448,25 @@ class otreestream
   void   add(std::string namen, std::vector<short>& data);
 
   ///
-  void   add(std::string namen, std::vector<char>& data);
+  //void   add(std::string namen, std::vector<char>& data);
 
   ///
   void   add(std::string namen, std::vector<bool>& data);
 
   ///
-  void   add(std::string namen, std::vector<unsigned long>& data);
+  //void   add(std::string namen, std::vector<unsigned long>& data);
 
   ///
   void   add(std::string namen, std::vector<unsigned int>& data);
 
   ///
   void   add(std::string namen, std::vector<unsigned short>& data);
+
+  ///
+  void   add(std::string namen, std::vector<double>& data, char iotype='D');
+
+  ///
+  void   add(std::string namen, std::vector<float>& data);
 
   ///
   void   add(std::string namen);
@@ -535,7 +536,6 @@ class otreestream
 	    char srctype, char iotype, bool isvector=false);
 };
 
-std::ostream& operator<<(std::ostream& os, const itreestream& tuple);
 std::ostream& operator<<(std::ostream& os, const otreestream& tuple);
 
 #endif

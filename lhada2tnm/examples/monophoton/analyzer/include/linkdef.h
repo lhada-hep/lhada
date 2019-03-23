@@ -41,6 +41,7 @@
 #pragma link C++ class eventBuffer::Photon_s;
 #pragma link C++ class vector<eventBuffer::Photon_s>;
 
+
 #pragma link C++ class lhadaThing;
 #pragma link C++ class analyzer_s;
 #pragma link C++ class TEParticle;

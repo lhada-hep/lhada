@@ -1,6 +1,6 @@
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 // File:        analyzer.cc
-// Description: Analyzer for LHADA analysis:
+// Description: Analyzer for ADL analysis:
 //
 // LHADA file: ../../../doc/ATLASSUSY1605.03814_lhproc.lhada
 // info block
@@ -13,14 +13,14 @@
 //	hepdata     	http://hepdata.cedar.ac.uk/view/ins1304456
 //	doi         	10.1140/epjc/s10052-016-4184-8
 //
-// Created:     Fri May 18 15:33:25 2018 by lhada2tnm.py
-//---------------------------------------------------------------------
+// Created:     Sat Mar 23 17:39:26 2019 by lhada2tnm.py v1.0.3
+//------------------------------------------------------------------
 #include "tnm.h"
 #include "DelphesAdapter.h"
 #include "analyzer_s.h"
 
 using namespace std;
-//---------------------------------------------------------------------
+//------------------------------------------------------------------
 int main(int argc, char** argv)
 {
   // If you want canvases to be visible during program execution, just
@@ -50,23 +50,21 @@ int main(int argc, char** argv)
 
   // Create output file for histograms; see notes in header 
   outputFile of(cl.outputfilename);
-
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   // Define histograms
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   //setStyle();
 
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   // Create an event adapter to map input types to a standard internal 
   // type and create the analyzer
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   DelphesAdapter adapter;
 
   analyzer_s analyzer;
-
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   // Loop over events
-  //---------------------------------------------------------------------
+  //------------------------------------------------------------------
   for(int entry=0; entry < nevents; entry++)
     {
       // read an event into event buffer
