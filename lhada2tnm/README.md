@@ -24,7 +24,7 @@ packages such as __treestream__ using the command
 	cd
 	cd external
 	git clone https://github.com/hbprosper/treestream
-	```
+```
 The package __treestream__ provides a simple convenient 	interface
 to flat ROOT trees comprising single variables (branches) of the
 standard types
@@ -47,17 +47,23 @@ __treestream__ to \$HOME/external as suggested.
 
 ## Example
 In this example, we shall try to run the ATLAS mono-photon analysis,
-described in the ADL file __doc/ATLASEXOT1704.0384\_Delphes.lhada__ on
-a CMS nano-AOD file, which we assume is called __ttjets\_NANOAOD.root__
+described in the ADL file 
+
+__doc/ATLASEXOT1704.0384\_Delphes.lhada__ 
+
+on a CMS nano-AOD file, which we assume is called 
+
+__ttjets\_NANOAOD.root__
+
 and resides in the directory __examples__.
-Go to the directory __examples/monophoton__.  and execute the following
+Go to the directory __examples/monophoton__  and execute the following
 command
 ```bash
 	mkvariables.py ../ttjets_NANOAOD.root
 ```
 This should produce a file called __variables.txt__ listing all of the
 variables in the first tree found in the ROOT file. For CMS nano-AODs,
-this tree is called *Events*. Now execute the command
+this tree is called __Events__. Now execute the command
 ```bash
 	mkanalyzer.py cmsnano
 ```
@@ -67,6 +73,8 @@ directory and do an __ls__. You should see a standard TNM release area:
 Makefile     cmsnano.cc include    python     src
 README     cmsnano.py lib           setup.sh   tmp
 ```
+The programs __mkvariables.py__ and __mkanalyzer.py__ are found in __treestream__.
+
 We are now going to overwrite __cmsnano.cc__ with a version that runs
 the ATLAS mono-photon analysis on the CMS nano-AOD file
 __ttjets\_NANOAOD.root__. Of course, we don't expect useful
