@@ -87,7 +87,7 @@ an __event adapter__ called __CMSNanoAODAdapter__ to map the input data
 types, which in this example are CMS nano-AOD types, to __Delphes__
 types, which are the types used in the specified ADL file. With hindsight, perhaps a better name for this event adapter would have been
 __CMSnanoAOD2Delphes__. Oh well! The __-t__ switch specifies which tree within
-ttjets\_NANOAOD.root is to be used. The last item in the command is the file containing the ATLAS
+ttjets\_NANOAOD.root is to be used. The last item in the command is the name of the file containing the ATLAS
 mono-photon analysis described using the ADL.
 
 The __lhada2tnm.py__ command creates
@@ -107,7 +107,7 @@ particle physicist. Now build the analyzer program using
 ```bash
 	make
 ```
-and run it by first specifying, in the file __filelist.txt__, which file (or files) are to be read,
+and run it by first specifying, in the file __filelist.txt__, the names of the files to be read,
 e.g., as follows,
 ```bash
 	ls -1 ../../ttjets_NANOAOD.root > filelist.txt
