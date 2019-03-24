@@ -5,7 +5,7 @@
 This program converts analysis descriptions given in the Analysis
 Description Language (ADL) defined at the 2015 Les Houches Workshop
 (with subsequent refinements) to a C++ program that runs within
-__TheNtupleMaker__ (TNM) ROOT n-tuple analysis framework developed by Sezen Sekmen and Harrison Prosper. The __lhada2tnm__
+__TheNtupleMaker__ (TNM) ROOT n-tuple analysis framework developed by Sezen Sekmen and Harrison Prosper. This program is a proof of principle of the ADL concept The __lhada2tnm__
 package is structured as follows,
 
 | __Directory__  | __Description__                   |
