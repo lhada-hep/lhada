@@ -103,21 +103,21 @@ updates
 and copies some files to the __include__ and __src__ directories. The real workhorse is the
 C++ program __src/cmsnano_s.cc__, which is written to be human readable,
 well at any rate readable by that perculiar variety of human called a
-particle physicist. Now build the analyzer program using
+particle physicist. Now build the analyzer program __cmsnano__ using
 ```bash
 	make
 ```
-and run it by first specifying, in the file __filelist.txt__, the names of the files to be read,
+List, in the file __filelist.txt__, the names of the files to be read by cmsnano,
 e.g., as follows,
 ```bash
 	ls -1 ../../ttjets_NANOAOD.root > filelist.txt
 ```
 then do
 ```bash
-	./cmsnano | tee summary.txt
+	./cmsnano | tee summary.dat
 ```
-to run the analysis.
+to run the analysis program.
 You will see several "no dictionary" warnings about complicated types that
 __treestream__ dutifully ignores! More importantly, you should see a file called
-__summary.txt__ containing cut-flow summaries of the ATLAS mono-photon analysis run on a CMS nano-AOD!
+__summary.dat__ when the program completes containing cut-flow summaries of the ATLAS mono-photon analysis run on a CMS nano-AOD!
 
