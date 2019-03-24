@@ -67,8 +67,8 @@ this tree is called __Events__. Now execute the command
 ```bash
 	mkanalyzer.py cmsnano
 ```
-This should create a directory called __cmsnano__. Change to that
-directory and do an __ls__ on it. You should see a standard TNM release area:
+This should create a directory called __cmsnano__. Go to that
+directory and list its contennts with __ls__. You should see a standard TNM release area:
 ```bash
 Makefile     cmsnano.cc include    python     src
 README     cmsnano.py lib           setup.sh   tmp
