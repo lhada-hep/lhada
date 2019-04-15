@@ -85,7 +85,7 @@ We are now going to overwrite __cmsnano.cc__ with a version that runs
 the ATLAS mono-photon analysis on the CMS nano-AOD file. Of course, we don't expect useful
 results, but this, after all, is just an exercise! To that end, run the command
 ```bash
-	lhada2tnm.py -a cmsnano -e CMSNanoAODAdapter -t Events ../../../doc/ATLASEXOT1704.0384_Delphes.lhada
+	lhada2tnm.py -a cmsnano -e CMSNanoAODAdapter -t Events ../../../doc/ATLASEXOT1704.0384_Delphes.adl
 ```
 which instructs __lhada2tnm.py__ to create a main program called
 __cmsnano.cc__, which calls the code in __src/cmsnano_s.cc__. The main program uses
