@@ -38,11 +38,17 @@ The file __setup.sh__ in lhada2tnm should be executed once per terminal window
 session to define the environment variable __LHADA2TNM\_PATH__, which
 points to lhada2tnm and
 adds $LHADA2TNM_PATH/bin to your __PATH__. Also make sure that you have
-access to treestream by executing the command
+access to treestream by executing the commands
 ```bash
   source $HOME/external/treestream/setup.sh
 ```
-again, once per terminal session. We've assumed you have cloned
+again, once per terminal session. The above command also sets  the environment variable
+__EXTERNAL__ to $HOME/external. To build treestream do
+```bash
+  cd $HOME/external/treestream
+  make
+```
+We've assumed you have cloned
 treestream to $HOME/external as suggested.
 
 ## Example
