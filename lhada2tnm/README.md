@@ -40,7 +40,7 @@ points to lhada2tnm and
 adds $LHADA2TNM_PATH/bin to your __PATH__. Also make sure that you have
 access to treestream by executing the command
 ```bash
-  source $HOME/external/setup.sh
+  source $HOME/external/treestream/setup.sh
 ```
 again, once per terminal session. We've assumed you have cloned
 treestream to $HOME/external as suggested.
@@ -49,7 +49,7 @@ treestream to $HOME/external as suggested.
 In this example, we shall try to run the __ATLAS mono-photon analysis__,
 described in the ADL file 
 
-__doc/ATLASEXOT1704.0384\_Delphes.lhada__ 
+__doc/ATLASEXOT1704.0384\_Delphes.adl__ 
 
 on a __CMS nano-AOD__ file, which we assume is called 
 
